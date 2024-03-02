@@ -5,6 +5,7 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/ui/provider/theme-provider";
 import { cn } from "@/lib/utils";
+import { ModalProvider } from "@/components/ui/provider/modal-provider";
 
 const sans =Open_Sans({ subsets: ["latin"] });
 
@@ -29,6 +30,7 @@ export default function RootLayout({
           enableSystem={false}
           storageKey="chat-application"
         >
+          <ModalProvider/>
         {children}
         </ThemeProvider>
         </body>
