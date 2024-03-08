@@ -15,9 +15,19 @@ import { useModal } from "@/hooks/use-modal-store";
 import { ServerWithMembersWithProfiles } from "@/types";
 import { ScrollArea } from "../ui/scroll-area";
 import { UserAvatar } from "../user-avatar";
-import { MoreVertical, ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
+import { Check, Gavel, Loader2, MoreVertical, Shield, ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
 import { useState } from "react";
-import { DropdownMenu, DropdownMenuSub,DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSubTrigger, DropdownMenuPortal } from "../ui/dropdown-menu";
+import { 
+    DropdownMenu,
+    DropdownMenuSub,
+    DropdownMenuContent, 
+    DropdownMenuTrigger,
+    DropdownMenuItem, 
+    DropdownMenuSubTrigger, 
+    DropdownMenuPortal, 
+    DropdownMenuSubContent, 
+    DropdownMenuSeparator} from "../ui/dropdown-menu";
+
 
 
 const roleIconMap ={
@@ -73,13 +83,39 @@ const ManageMembersModal = () => {
                                            <span>Role</span>
                                        </DropdownMenuSubTrigger>
                                        <DropdownMenuPortal>
-                                        
+                                        <DropdownMenuSubContent>
+                                            <DropdownMenuItem>
+                                                <Shield className="h-4 w-4 mr-2"/>
+                                                Guest
+                                                {member.role==="GUEST" && (
+                                                    <Check className="h-4 w-4 ml-auto"/>
+                                                )}
+                                            </DropdownMenuItem>
+
+                                            <DropdownMenuItem>
+                                                <ShieldCheck className="h-4 w-4 mr-2"/>
+                                                Moderator
+                                                {member.role==="MODERATOR" && (
+                                                    <Check className="h-4 w-4 ml-auto"/>
+                                                )}
+                                            </DropdownMenuItem>
+
+                                        </DropdownMenuSubContent>
+
                                        </DropdownMenuPortal>
                                     </DropdownMenuSub>
-
+                                   <DropdownMenuSeparator/>
+                                   <DropdownMenuItem>
+                                    <Gavel className="h-4 w-4 mr-2"/>
+                                    Kick
+                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
+                    )}
+
+                    {loadingId=== member.id &&(
+                        <Loader2 className="animate-spin text-zinc-500 ml-auto w-4 h-4"/>
                     )}
                 
             </div>
