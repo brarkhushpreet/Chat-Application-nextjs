@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ui/provider/theme-provider";
 import { cn } from "@/lib/utils";
 import { ModalProvider } from "@/components/ui/provider/modal-provider";
 
+
 const sans =Open_Sans({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -20,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider >
     <html lang="en"  suppressHydrationWarning>
       <body className={cn(sans.className,
       "bg-white dark:bg-[#313338]")}>
