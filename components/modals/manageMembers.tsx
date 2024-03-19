@@ -61,7 +61,7 @@ const ManageMembersModal = () => {
             console.log(error);
             
         }
-    }
+    } 
     
     const onRoleChange= async (memberId:string,role:MemberRole)=>{
        try {
