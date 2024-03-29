@@ -3,9 +3,11 @@ import type { Metadata } from "next";
 import { Open_Sans } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
-import { ThemeProvider } from "@/components/ui/provider/theme-provider";
+import { ThemeProvider } from "@/components/provider/theme-provider";
 import { cn } from "@/lib/utils";
-import { ModalProvider } from "@/components/ui/provider/modal-provider";
+import { ModalProvider } from "@/components/provider/modal-provider";
+import { SocketProvider } from "@/components/provider/socket-provider";
+import { QueryProvider } from "@/components/provider/query-provider";
 
 
 const sans =Open_Sans({ subsets: ["latin"] });
@@ -31,8 +33,12 @@ export default function RootLayout({
           enableSystem={false}
           storageKey="chat-application"
         >
-          <ModalProvider/>
+        <SocketProvider>
+        <ModalProvider/>
+        <QueryProvider>
         {children}
+        </QueryProvider> 
+        </SocketProvider>
         </ThemeProvider>
         </body>
     </html>
