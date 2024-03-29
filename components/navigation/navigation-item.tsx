@@ -44,6 +44,7 @@ export const NavigationItem = ({
           params?.serverId === id && "bg-primary/10 text-primary rounded-[16px]"
         )}>
           <Image
+          unoptimized
             fill
             src={imageUrl}
             alt="Channel"

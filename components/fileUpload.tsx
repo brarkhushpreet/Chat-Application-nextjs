@@ -18,6 +18,7 @@ export const FileUpload=({onChange,value,endpoint}:FileUploadProps)=>{
         return (
             <div className="relative h-20 w-20">
                 <Image
+                unoptimized
                  fill
                  src={value}
                  alt="Upload"

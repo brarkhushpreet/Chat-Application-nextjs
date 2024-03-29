@@ -155,6 +155,7 @@ export const ChatItem = ({
               className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48"
             >
               <Image
+                unoptimized
                 src={fileUrl}
                 alt={content}
                 fill
