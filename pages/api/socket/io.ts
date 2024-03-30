@@ -20,8 +20,8 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
       // @ts-ignore
       addTrailingSlash: false,
       cors: {
-        origin: ["https://chat-application-nextjs-production-2d82.up.railway.app"],
-        methods: ["GET", "POST"],
+        origin: "*",
+        methods: ["GET", "POST","DELETE","PATCH"],
       },
     });
     res.socket.server.io = io;
