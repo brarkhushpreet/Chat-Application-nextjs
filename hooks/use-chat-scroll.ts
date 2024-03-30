@@ -43,6 +43,13 @@ export const useChatScroll = ({
         setHasInitialized(true);
         return true;
       }
+      if (true) {
+        setTimeout(() => {
+          bottomRef.current?.scrollIntoView({
+            behavior: "smooth",
+          });
+        }, 100);
+      }
 
       if (!topDiv) {
         return false;
@@ -52,12 +59,6 @@ export const useChatScroll = ({
       return distanceFromBottom <= 100;
     }
 
-    if (shouldAutoScroll()) {
-      setTimeout(() => {
-        bottomRef.current?.scrollIntoView({
-          behavior: "smooth",
-        });
-      }, 100);
-    }
+   
   }, [bottomRef, chatRef, count, hasInitialized]);
 }
