@@ -6,7 +6,7 @@ import qs from "query-string";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Member, MemberRole, Profile } from "@prisma/client";
-import { Edit, FileIcon, ShieldAlert, ShieldCheck, Trash } from "lucide-react";
+import { Check, CheckCheck, Edit, FileIcon, ShieldAlert, ShieldCheck, Trash } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useModal } from "@/hooks/use-modal-store";
+import { startConversation } from "@/lib/start-conversation";
 
 interface ChatItemProps {
   id: string;
@@ -35,6 +36,8 @@ interface ChatItemProps {
   deleted: boolean;
   currentMember: Member;
   isUpdated: boolean;
+  deliveredAt: Date | string | null;
+  readAt: Date | string | null;
   socketUrl: string;
   socketQuery: Record<string, string>;
 };
@@ -58,6 +61,8 @@ export const ChatItem = ({
   deleted,
   currentMember,
   isUpdated,
+  deliveredAt,
+  readAt,
   socketUrl,
   socketQuery
 }: ChatItemProps) => {
@@ -66,24 +71,26 @@ export const ChatItem = ({
   const params = useParams();
   const router = useRouter();
 
-  const onMemberClick = () => {
+  const onMemberClick = async () => {
     if (member.id === currentMember.id) {
       return;
     }
-  
-    router.push(`/servers/${params?.serverId}/conversations/${member.id}`);
+
+    const serverId = String(params?.serverId);
+    await startConversation(serverId, member.id);
+    router.push(`/servers/${serverId}/conversations/${member.id}`);
   }
 
   useEffect(() => {
-    const handleKeyDown = (event: any) => {
-      if (event.key === "Escape" || event.keyCode === 27) {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
         setIsEditing(false);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
 
-    return () => window.removeEventListener("keyDown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -115,7 +122,7 @@ export const ChatItem = ({
     form.reset({
       content: content,
     })
-  }, [content]);
+  }, [content, form]);
 
   const fileType = fileUrl?.split(".").pop();
 
@@ -126,24 +133,32 @@ export const ChatItem = ({
   const canEditMessage = !deleted && isOwner && !fileUrl;
   const isPDF = fileType === "pdf" && fileUrl;
   const isImage = !isPDF && fileUrl;
+  const isRead = Boolean(readAt);
+  const isDelivered = Boolean(deliveredAt);
 
   return (
-    <div className="relative group flex items-center hover:bg-black/5 p-4 transition w-full">
-      <div className="group flex gap-x-2 items-start w-full">
-        <div onClick={onMemberClick} className="cursor-pointer hover:drop-shadow-md transition">
-          <UserAvatar src={member.profile.imageUrl} />
-        </div>
-        <div className="flex flex-col w-full">
-          <div className="flex items-center gap-x-2">
-            <div className="flex items-center">
-              <p onClick={onMemberClick} className="font-semibold text-sm hover:underline cursor-pointer">
-                {member.profile.name}
-              </p>
+    <div className={cn(
+      "group relative flex w-full px-4 py-2.5 md:px-6",
+      isOwner ? "justify-end" : "justify-start",
+    )}>
+      <div className={cn(
+        "flex min-w-0 max-w-[92%] items-end gap-2.5 md:max-w-[72%]",
+        isOwner && "flex-row-reverse",
+      )}>
+        <button type="button" onClick={onMemberClick} disabled={isOwner} aria-label={`Message ${member.profile.name}`} className="mb-5 shrink-0 rounded-full transition hover:opacity-80 disabled:cursor-default">
+          <UserAvatar src={member.profile.imageUrl} className="h-9 w-9 ring-2 ring-black/[0.04] md:h-10 md:w-10 dark:ring-white/[0.06]" />
+        </button>
+        <div className={cn("flex min-w-0 flex-col", isOwner ? "items-end" : "items-start")}>
+          <div className={cn("flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 px-1", isOwner && "flex-row-reverse")}>
+            <div className={cn("flex items-center", isOwner && "flex-row-reverse")}>
+              <button type="button" onClick={onMemberClick} disabled={isOwner} className="break-words text-left text-sm font-semibold tracking-tight hover:text-primary disabled:cursor-default">
+                {isOwner ? "You" : member.profile.name}
+              </button>
               <ActionTooltip label={member.role}>
                 {roleIconMap[member.role]}
               </ActionTooltip>
             </div>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="text-[11px] font-medium text-muted-foreground">
               {timestamp}
             </span>
           </div>
@@ -152,7 +167,10 @@ export const ChatItem = ({
               href={fileUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48"
+              className={cn(
+                "relative mt-1.5 flex aspect-square h-48 w-48 items-center overflow-hidden rounded-2xl border bg-secondary shadow-sm",
+                isOwner ? "border-[#7567ff]/45" : "border-black/[0.06] dark:border-white/[0.08]",
+              )}
             >
               <Image
                 unoptimized
@@ -164,7 +182,10 @@ export const ChatItem = ({
             </a>
           )}
           {isPDF && (
-            <div className="relative flex items-center p-2 mt-2 rounded-md bg-background/10">
+            <div className={cn(
+              "relative mt-1.5 flex items-center rounded-2xl p-3 shadow-sm",
+              isOwner ? "bg-[#7567ff] text-white" : "bg-[#f0f2f6] dark:bg-[#191f2a]",
+            )}>
               <FileIcon className="h-10 w-10 fill-indigo-200 stroke-indigo-400" />
               <a 
                 href={fileUrl}
@@ -172,18 +193,24 @@ export const ChatItem = ({
                 rel="noopener noreferrer"
                 className="ml-2 text-sm text-indigo-500 dark:text-indigo-400 hover:underline"
               >
-                PDF File
+                PDF attachment
               </a>
             </div>
           )}
           {!fileUrl && !isEditing && (
             <p className={cn(
-              "text-sm text-zinc-600 dark:text-zinc-300",
-              deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1"
+              "mt-1 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-4 py-2.5 text-sm leading-6",
+              isOwner
+                ? "rounded-br-md bg-primary text-primary-foreground"
+                : "message-received rounded-bl-md border",
+              deleted && "bg-transparent text-xs italic text-zinc-500 shadow-none ring-1 ring-black/[0.06] dark:text-zinc-400 dark:ring-white/[0.08]"
             )}>
               {content}
               {isUpdated && !deleted && (
-                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
+                <span className={cn(
+                  "mx-2 text-[10px]",
+                  isOwner ? "text-white/65" : "text-zinc-500 dark:text-zinc-400",
+                )}>
                   (edited)
                 </span>
               )}
@@ -192,7 +219,7 @@ export const ChatItem = ({
           {!fileUrl && isEditing && (
             <Form {...form}>
               <form 
-                className="flex items-center w-full gap-x-2 pt-2"
+                className="flex w-full min-w-0 items-center gap-x-2 pt-2 md:min-w-[24rem]"
                 onSubmit={form.handleSubmit(onSubmit)}>
                   <FormField
                     control={form.control}
@@ -221,26 +248,42 @@ export const ChatItem = ({
               </span>
             </Form>
           )}
+          {isOwner && !deleted && !isEditing && (
+            <span className={cn(
+              "mt-1 flex items-center gap-1 px-1 text-[11px] font-medium",
+              isRead ? "text-[#6557e8] dark:text-[#9f96ff]" : "text-muted-foreground",
+            )}>
+              {isRead || isDelivered
+                ? <CheckCheck className="h-3.5 w-3.5" />
+                : <Check className="h-3.5 w-3.5" />}
+              {isRead ? "Read" : isDelivered ? "Delivered" : "Sent"}
+            </span>
+          )}
         </div>
       </div>
       {canDeleteMessage && (
-        <div className="hidden group-hover:flex items-center gap-x-2 absolute p-1 -top-2 right-5 bg-white dark:bg-zinc-800 border rounded-sm">
+        <div className={cn(
+          "absolute -top-3 flex items-center gap-x-1 rounded-xl border border-[#dfe3eb] bg-white p-1 shadow-sm md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto md:group-focus-within:opacity-100 md:group-focus-within:pointer-events-auto dark:border-white/[0.08] dark:bg-[#181d26]",
+          isOwner ? "right-16" : "left-16",
+        )}>
           {canEditMessage && (
             <ActionTooltip label="Edit">
-              <Edit
+              <button type="button" aria-label="Edit message" className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setIsEditing(true)}
-                className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
-              />
+              >
+                <Edit className="h-4 w-4" />
+              </button>
             </ActionTooltip>
           )}
           <ActionTooltip label="Delete">
-            <Trash
+            <button type="button" aria-label="Delete message" className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               onClick={() => onOpen("deleteMessage", { 
                 apiUrl: `${socketUrl}/${id}`,
                 query: socketQuery,
                })}
-              className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
-            />
+            >
+              <Trash className="h-4 w-4" />
+            </button>
           </ActionTooltip>
         </div>
       )}

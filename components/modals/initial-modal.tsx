@@ -1,5 +1,4 @@
 "use client"
-import { useState,useEffect } from "react";
 import axios from "axios"
 import * as z from "zod"
 import {zodResolver} from "@hookform/resolvers/zod"
@@ -25,22 +24,17 @@ import {
   import { Button } from "../ui/button";
 import { FileUpload } from "../fileUpload";
 import { useRouter } from "next/navigation";
+import { useMounted } from "@/hooks/use-mounted";
 
 const formSchema=z.object({
     name:z.string().min(1,{
-        message:"Server name is required."
+        message:"Space name is required."
     }),
-    imageUrl:z.string().min(1,{
-        message:"Server image is required."
-    })
+    imageUrl:z.string().optional()
 })
 const InitialModal = () => { 
-    const [isMounted,setIsMounted]=useState(false);
+    const isMounted = useMounted();
     const router =useRouter();
-
-    useEffect(()=>{
-        setIsMounted(true);
-    },[]);
 
     const form = useForm({
         resolver:zodResolver(formSchema),
@@ -68,22 +62,30 @@ const InitialModal = () => {
     
   return (
    <Dialog open={true}>
-     <DialogContent className="bg-white text-black p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-           <DialogTitle className="text-2xl text-center font-bold">Customize your server</DialogTitle>
-           <DialogDescription className="text-center text-zinc-500 ">
-            Give your server a personality with a name and an image.You can always change it later.
+     <DialogContent
+       onEscapeKeyDown={(event) => event.preventDefault()}
+       onInteractOutside={(event) => event.preventDefault()}
+       className="w-[calc(100%-2rem)] max-w-[460px] overflow-hidden rounded-2xl border border-black/[0.07] bg-white p-0 text-[#171923] shadow-2xl shadow-black/15 dark:border-white/[0.08] dark:bg-[#11141b] dark:text-[#f3efe7] [&>button]:hidden"
+     >
+        <DialogHeader className="items-center px-8 pt-8 text-center sm:text-center">
+           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#7567ff]/10 text-lg font-extrabold text-[#6959f6] dark:text-[#a39bff]">N.</div>
+           <DialogTitle className="text-center text-2xl font-extrabold tracking-[-0.035em]">Create your first space</DialogTitle>
+           <DialogDescription className="max-w-sm text-center leading-6 text-muted-foreground">
+            Choose a name now. Adding an image is completely optional.
            </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                <div className="space-y-8 px-6">
-                    <div className="flex items-center justify-center text-center">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="space-y-6 px-8">
+                    <div className="flex w-full items-center justify-center text-center">
                     <FormField
                      control={form.control}
                      name="imageUrl"
                      render={({field})=>(
-                        <FormItem>
+                        <FormItem className="w-full">
+                            <FormLabel className="text-xs font-semibold text-muted-foreground">
+                                Space image <span className="font-medium normal-case tracking-normal">(optional)</span>
+                            </FormLabel>
                             <FormControl>
                                    <FileUpload
                                    endpoint="serverImage"
@@ -102,16 +104,16 @@ const InitialModal = () => {
                     name="name"
                     render={({field})=>(
                         <FormItem>
-                            <FormLabel className="uppercase text-xs font-bold text-zinc-500 dark:text-secondary/70"
+                            <FormLabel className="text-xs font-semibold text-muted-foreground"
                             >
-                                Server name
+                                Space name
 
                             </FormLabel>
                             <FormControl>
                                  <Input
                                 disabled={isLoading}
-                                className="bg-zinc-300/50 border-0 focus-visible:ring-0 text-black focus-visible:ring-offset-0"
-                                placeholder="Enter server name"
+                                className="h-12 rounded-2xl border border-black/[0.07] bg-white px-4 text-black shadow-none focus-visible:ring-4 focus-visible:ring-[#7567ff]/10 focus-visible:ring-offset-0 dark:border-white/[0.09] dark:bg-white/[0.045] dark:text-white"
+                                placeholder="Enter space name"
                                 {...field}
                                 />
                             </FormControl>
@@ -120,8 +122,8 @@ const InitialModal = () => {
                     )}
                     />
                 </div>
-                <DialogFooter className="bg-gray-100 px-6 py-4">
-                    <Button  variant="primary" disabled={isLoading}>Create</Button>
+                <DialogFooter className="bg-black/[0.025] px-8 py-5 dark:bg-white/[0.025] sm:justify-center">
+                    <Button className="h-11 w-full rounded-2xl" variant="primary" disabled={isLoading}>Create space</Button>
                 </DialogFooter>
 
             </form>

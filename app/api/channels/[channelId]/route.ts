@@ -3,12 +3,14 @@ import { MemberRole } from "@prisma/client";
 
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
+import { notifySpaceUpdated } from "@/lib/space-events";
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { channelId: string } }
+  { params }: { params: Promise<{ channelId: string }> }
 ) {
   try {
+    const { channelId } = await params;
     const profile = await currentProfile();
     const { searchParams } = new URL(req.url);
 
@@ -22,7 +24,7 @@ export async function DELETE(
       return new NextResponse("Server ID missing", { status: 400 });
     }
 
-    if (!params.channelId) {
+    if (!channelId) {
       return new NextResponse("Channel ID missing", { status: 400 });
     }
 
@@ -41,7 +43,7 @@ export async function DELETE(
       data: {
         channels: {
           delete: {
-            id: params.channelId,
+            id: channelId,
             name: {
               not: "general",
             }
@@ -50,6 +52,7 @@ export async function DELETE(
       }
     });
 
+    await notifySpaceUpdated(serverId);
     return NextResponse.json(server);
   } catch (error) {
     console.log("[CHANNEL_ID_DELETE]", error);
@@ -59,9 +62,10 @@ export async function DELETE(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { channelId: string } }
+  { params }: { params: Promise<{ channelId: string }> }
 ) {
   try {
+    const { channelId } = await params;
     const profile = await currentProfile();
     const { name, type } = await req.json();
     const { searchParams } = new URL(req.url);
@@ -76,7 +80,7 @@ export async function PATCH(
       return new NextResponse("Server ID missing", { status: 400 });
     }
 
-    if (!params.channelId) {
+    if (!channelId) {
       return new NextResponse("Channel ID missing", { status: 400 });
     }
 
@@ -100,7 +104,7 @@ export async function PATCH(
         channels: {
           update: {
             where: {
-              id: params.channelId,
+              id: channelId,
               NOT: {
                 name: "general",
               },
@@ -114,6 +118,7 @@ export async function PATCH(
       }
     });
 
+    await notifySpaceUpdated(serverId);
     return NextResponse.json(server);
   } catch (error) {
     console.log("[CHANNEL_ID_PATCH]", error);

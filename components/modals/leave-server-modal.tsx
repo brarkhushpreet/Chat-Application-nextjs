@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
 
 const LeaveServerModal = () => { 
 
-    const{isOpen,onOpen,onClose,type,data}= useModal();
+    const{isOpen,onClose,type,data}= useModal();
     const {server}=data;
     const router= useRouter();
    
@@ -52,14 +52,14 @@ const LeaveServerModal = () => {
 
   return (
    <Dialog open={isModalOpen} onOpenChange={onClose}>
-     <DialogContent className="bg-white text-black p-0 overflow-hidden">
+     <DialogContent className="overflow-hidden border-border bg-card p-0 text-card-foreground">
         <DialogHeader className="pt-8 px-6">
-           <DialogTitle className="text-2xl text-center font-bold">Leave Server</DialogTitle>
+           <DialogTitle className="text-2xl text-center font-bold">Leave space</DialogTitle>
            <DialogDescription className="text-center text-zinc-500">
             Are you sure you want to leave <span className="font-semibold text-indigo-500">{server?.name}</span> ?
            </DialogDescription>
        </DialogHeader>
-       <DialogFooter className="bg-gray-100 px-6 py-4">
+       <DialogFooter className="border-t border-border bg-muted/50 px-6 py-4">
         <div className="flex items-center justify-between w-full">
             <Button
              disabled={isLoading}

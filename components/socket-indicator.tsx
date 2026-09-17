@@ -1,27 +1,31 @@
 "use client"
 
-import { Badge } from "./ui/badge";
-import { useSocket } from "./provider/socket-provider"
+import { Wifi, WifiOff } from "lucide-react";
+import { useSocket } from "./provider/socket-provider";
 
 export const SocketIndicator=()=>{
-   const {isConnected} =useSocket();
+   const { isConnected, status, error, transport, reconnect } = useSocket();
 
    if(!isConnected){
     return (
-        <Badge
-        variant="outline"
-        className="bg-yellow-600 text-white border-none"
+        <button
+          type="button"
+          onClick={reconnect}
+          title={error ?? "Reconnecting to realtime"}
+          className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-300"
         >
-          Fallback:Polling every 1 second
-        </Badge>
+          <WifiOff className="h-3.5 w-3.5" />
+          {status === "connecting" ? "Reconnecting" : "Retry realtime"}
+        </button>
     )
    }
    return (
-    <Badge
-        variant="outline"
-        className="bg-emerald-600 text-white border-none"
-        >
-          Live: Real Time updates
-        </Badge>
+    <div
+      title={`Realtime connected with ${transport ?? "Socket.IO"}`}
+      className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-300"
+    >
+      <Wifi className="h-3.5 w-3.5" />
+      {transport === "polling" ? "Live · polling" : "Live"}
+    </div>
    )
 }

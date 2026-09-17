@@ -11,15 +11,15 @@ const NavigationAction = () => {
       <ActionTooltip
       side="right"
       align="center"
-      label="Add a server"
+      label="Create a space"
       >
       <button 
       onClick={()=>onOpen("createServer")}
       className='group flex items-center' >
-        <div className="flex mx-3 h-[48px] w-[48px] rounded-[24px] group-hover:rounded-[16px] transition-all overflow-hidden items-center justify-center bg-background dark:bg-neutral-700 group-hover:bg-emerald-500">
+        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[14px] border border-dashed border-black/20 bg-black/[0.035] transition group-hover:border-[#7567ff]/55 group-hover:bg-[#7567ff] dark:border-white/20 dark:bg-white/[0.055] dark:group-hover:border-[#8a7fff]/60">
           <Plus
-          className="group-hover:text-white transition text-emerald-500"
-          size={25}
+          className="text-black/45 transition group-hover:rotate-90 group-hover:text-white dark:text-white/50"
+          size={20}
           />
         </div>
       </button>

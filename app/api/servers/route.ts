@@ -1,4 +1,3 @@
-import {v4 as uuidv4} from "uuid"
 import { currentProfile } from "@/lib/current-profile";
 
 import { db } from "@/lib/db";
@@ -7,10 +6,18 @@ import { MemberRole } from "@prisma/client";
 
 export async function  POST(req:Request){
     try {
-        const{name,imageUrl}=await req.json();
+        const body = await req.json();
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        const imageUrl =
+            typeof body.imageUrl === "string" && body.imageUrl.trim()
+                ? body.imageUrl
+                : "/default-space.svg";
         const profile= await currentProfile();
         if(!profile){
             return new NextResponse("Unauthorized",{status:401});
+        }
+        if(!name){
+            return new NextResponse("Space name is required",{status:400});
         }
 
         const server= await db.server.create({
@@ -18,7 +25,7 @@ export async function  POST(req:Request){
                 profileId:profile.id,
                 name,
                 imageUrl,
-                inviteCode:uuidv4(),
+                inviteCode: crypto.randomUUID(),
                 channels:{
                     create:[
                          {name:"general",profileId:profile.id}

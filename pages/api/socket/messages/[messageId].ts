@@ -4,6 +4,7 @@ import { MemberRole } from "@prisma/client";
 import { NextApiResponseServerIo } from "@/types";
 import { currentProfilePages } from "@/lib/current-profile-pages";
 import { db } from "@/lib/db";
+import { emitChatEvent } from "@/lib/realtime";
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,7 +15,7 @@ export default async function handler(
   }
 
   try {
-    const profile = await currentProfilePages(req);
+    const profile = await currentProfilePages(req, res);
     const { messageId, serverId, channelId } = req.query;
     const { content } = req.body;
 
@@ -123,6 +124,8 @@ export default async function handler(
         },
         data: {
           content,
+          editedAt: new Date(),
+          readAt: null,
         },
         include: {
           member: {
@@ -136,7 +139,7 @@ export default async function handler(
 
     const updateKey = `chat:${channelId}:messages:update`;
 
-    res?.socket?.server?.io?.emit(updateKey, message);
+    await emitChatEvent(channelId as string, updateKey, message);
 
     return res.status(200).json(message);
   } catch (error) {

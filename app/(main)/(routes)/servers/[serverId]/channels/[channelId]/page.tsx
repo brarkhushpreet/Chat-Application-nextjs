@@ -4,38 +4,38 @@ import { ChatMessages } from '@/components/chat/chat-messages';
 import { MediaRoom } from '@/components/media-room';
 import { currentProfile } from '@/lib/current-profile'
 import { db } from '@/lib/db'
-import { redirectToSignIn } from '@clerk/nextjs';
 import { ChannelType } from '@prisma/client';
 import { redirect } from 'next/navigation';
 
 
 interface channelIdPageProps{
-    params:{
+    params: Promise<{
         channelId:string;
         serverId:string;
-    }
+    }>;
 }
 
 const channelIdPage = async (
 
     {params}:channelIdPageProps
 ) => {
+    const { channelId, serverId } = await params;
     const profile= await currentProfile();
 
     if(!profile){
-        return redirectToSignIn();
+        return redirect("/sign-in");
     }
 
 
     const channel= await db.channel.findUnique({
       where:{
-        id:params.channelId,
+        id: channelId,
       }
     })
 
     const member= await db.member.findFirst({
         where:{
-            serverId:params.serverId,
+            serverId,
             profileId:profile.id,
         }
     })
@@ -46,10 +46,10 @@ const channelIdPage = async (
     
 
   return (
-    <div className="bg-white dark:bg-[#313338] flex flex-col h-full">
+    <div className="conversation-panel flex h-full flex-col overflow-hidden rounded-2xl border">
       
        <ChatHeader
-       serverId={params.serverId}
+       serverId={serverId}
        name={channel?.name}
        type="channel"
        />
@@ -76,7 +76,7 @@ const channelIdPage = async (
         name={channel?.name}
         query={{
           channelId:channel.id,
-          serverId:params.serverId,
+          serverId,
         }
       }
       />
@@ -87,6 +87,7 @@ const channelIdPage = async (
           chatId={channel.id}
           video={false}
           audio={true}
+          roomKind="channel"
         />
       )}
       {channel.type === ChannelType.VIDEO && (
@@ -94,6 +95,7 @@ const channelIdPage = async (
           chatId={channel.id}
           video={true}
           audio={true}
+          roomKind="channel"
         />
       )}
     </div>

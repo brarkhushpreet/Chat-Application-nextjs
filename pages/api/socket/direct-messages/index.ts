@@ -3,6 +3,7 @@ import { NextApiRequest } from "next";
 import { NextApiResponseServerIo } from "@/types";
 import { currentProfilePages } from "@/lib/current-profile-pages";
 import { db } from "@/lib/db";
+import { emitChatEvent, emitUserEvent, isUserOnline } from "@/lib/realtime";
 
 export default async function handler(
   req: NextApiRequest,
@@ -13,7 +14,7 @@ export default async function handler(
   }
 
   try {
-    const profile = await currentProfilePages(req);
+    const profile = await currentProfilePages(req, res);
     const { content, fileUrl } = req.body;
     const { conversationId } = req.query;
     
@@ -65,6 +66,10 @@ export default async function handler(
     }
 
     const member = conversation.memberOne.profileId === profile.id ? conversation.memberOne : conversation.memberTwo
+    const recipient = member.id === conversation.memberOne.id
+      ? conversation.memberTwo
+      : conversation.memberOne;
+    const deliveredAt = await isUserOnline(recipient.profile.userId) ? new Date() : null;
 
     if (!member) {
       return res.status(404).json({ message: "Member not found" });
@@ -76,6 +81,7 @@ export default async function handler(
         fileUrl,
         conversationId: conversationId as string,
         memberId: member.id,
+        deliveredAt,
       },
       include: {
         member: {
@@ -88,7 +94,14 @@ export default async function handler(
 
     const channelKey = `chat:${conversationId}:messages`;
 
-    res?.socket?.server?.io?.emit(channelKey, message);
+    await emitUserEvent(recipient.profile.userId, "sidebar:message", {
+      kind: "conversation",
+      roomId: conversationId as string,
+      messageId: message.id,
+      createdAt: message.createdAt,
+    });
+
+    await emitChatEvent(conversationId as string, channelKey, message);
 
     return res.status(200).json(message);
   } catch (error) {

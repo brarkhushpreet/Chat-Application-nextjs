@@ -1,7 +1,7 @@
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
+import { notifySpaceUpdated } from "@/lib/space-events";
 import { MemberRole } from "@prisma/client";
-import { channel } from "diagnostics_channel";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -45,6 +45,7 @@ export async function POST(
                 }
             }
         })
+        await notifySpaceUpdated(serverId);
         return NextResponse.json(server);
     } catch (error) {
         console.log("Channels_Post",error);

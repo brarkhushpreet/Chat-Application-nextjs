@@ -32,22 +32,23 @@ export const NavigationItem = ({
     >
       <button
         onClick={onClick}
-        className="group relative flex items-center"
+        className="group relative flex w-full items-center justify-center"
       >
         <div className={cn(
-          "absolute left-0 bg-primary rounded-r-full transition-all w-[4px]",
-          params?.serverId !== id && "group-hover:h-[20px]",
-          params?.serverId === id ? "h-[36px]" : "h-[8px]"
+          "absolute left-1.5 h-2 w-2 rounded-full bg-[#7567ff] opacity-0 transition-all",
+          params?.serverId !== id && "group-hover:opacity-50",
+          params?.serverId === id && "opacity-100 shadow-[0_0_0_5px_rgba(117,103,255,.12)]"
         )} />
         <div className={cn(
-          "relative group flex mx-3 h-[48px] w-[48px] rounded-[24px] group-hover:rounded-[16px] transition-all overflow-hidden",
-          params?.serverId === id && "bg-primary/10 text-primary rounded-[16px]"
+          "relative flex h-12 w-12 overflow-hidden rounded-[18px] ring-1 ring-black/5 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-lg dark:ring-white/10",
+          params?.serverId === id && "-translate-y-0.5 rounded-[14px] ring-2 ring-[#7567ff]/50 shadow-xl shadow-[#7567ff]/10"
         )}>
           <Image
           unoptimized
             fill
             src={imageUrl}
-            alt="Channel"
+            alt={name}
+            className="object-cover"
           />
         </div>
       </button>

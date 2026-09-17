@@ -20,16 +20,15 @@ export const ServerSection=({
 
     return (
         <div>
-            <div className="flex items-center justify-between py-2">
-                <p className="text-xs uppercase font-semibold text-zinc-500 dark:text-zinc-400">
+            <div className="flex items-center justify-between px-1 pb-2 pt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     {label}
                 </p>
                 {role!==MemberRole.GUEST && sectionType==="channels" &&(
-                    <ActionTooltip label="Create Channel" side="top">
+                    <ActionTooltip label="Create room" side="top">
                       <button 
-                      onClick={()=> onOpen("createChannel",{channelType})}
-                      className="text-zinc 500 hover:text-zinc-600 dark:text-zinc-400  dark:hover:text-zinc-300
-                      transition">
+                      aria-label="Create room" onClick={()=> onOpen("createChannel",{channelType})}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-accent-foreground">
                         <Plus className="h-4 w-4" />
                       </button>
                     </ActionTooltip>
@@ -38,9 +37,8 @@ export const ServerSection=({
                 {role===MemberRole.ADMIN && sectionType==="members" &&(
                     <ActionTooltip label="Manage Members" side="top">
                       <button 
-                      onClick={()=> onOpen("members",{server})}
-                      className="text-zinc 500 hover:text-zinc-600 dark:text-zinc-400  dark:hover:text-zinc-300
-                      transition">
+                      aria-label="Manage people" onClick={()=> onOpen("members",{server})}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-accent-foreground">
                         <Settings className="h-4 w-4" />
                       </button>
                     </ActionTooltip>

@@ -6,35 +6,70 @@ import {
   MemberRole,
   Server
 } from "@prisma/client";
-import { Edit, Hash, Lock, Mic, Trash, Video } from "lucide-react";
+import { AudioLines, Edit, Lock, MessageCircleMore, Trash, Video } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { ActionTooltip } from "@/components/action-tooltip";
 import { ModalType, useModal } from "@/hooks/use-modal-store";
+import { useSocket } from "@/components/provider/socket-provider";
 
 interface ServerChannelProps {
   channel: Channel;
   server: Server;
   role?: MemberRole;
+  initialUnreadCount?: number;
 }
 
 const iconMap = {
-  [ChannelType.TEXT]: Hash,
-  [ChannelType.AUDIO]: Mic,
+  [ChannelType.TEXT]: MessageCircleMore,
+  [ChannelType.AUDIO]: AudioLines,
   [ChannelType.VIDEO]: Video,
 }
 
 export const ServerChannel = ({
   channel,
   server,
-  role
+  role,
+  initialUnreadCount = 0,
 }: ServerChannelProps) => {
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
+  const { socket } = useSocket();
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
 
   const Icon = iconMap[channel.type];
+
+  useEffect(() => {
+    if (!socket) {
+      return;
+    }
+
+    const onMessage = (payload: { kind: string; roomId: string }) => {
+      if (payload.kind !== "channel" || payload.roomId !== channel.id) {
+        return;
+      }
+      const isActivelyReading =
+        params?.channelId === channel.id && document.visibilityState === "visible";
+      if (!isActivelyReading) {
+        setUnreadCount((count) => count + 1);
+      }
+    };
+    const onRead = (payload: { kind: string; roomId: string }) => {
+      if (payload.kind === "channel" && payload.roomId === channel.id) {
+        setUnreadCount(0);
+      }
+    };
+
+    socket.on("sidebar:message", onMessage);
+    socket.on("sidebar:read", onRead);
+    return () => {
+      socket.off("sidebar:message", onMessage);
+      socket.off("sidebar:read", onRead);
+    };
+  }, [channel.id, params?.channelId, socket]);
 
   const onClick = () => {
     router.push(`/servers/${params?.serverId}/channels/${channel.id}`)
@@ -49,19 +84,26 @@ export const ServerChannel = ({
     <button
       onClick={onClick}
       className={cn(
-        "group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition mb-1",
-        params?.channelId === channel.id && "bg-zinc-700/20 dark:bg-zinc-700"
+        "group mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-foreground/[0.04] dark:hover:bg-white/[0.055]",
+        params?.channelId === channel.id && "bg-card text-primary shadow-sm ring-1 ring-inset ring-border dark:shadow-none dark:ring-transparent dark:bg-primary/15"
       )}
     >
-      <Icon className="flex-shrink-0 w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+      <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-black/[0.04] text-black/40 transition dark:bg-white/[0.05] dark:text-white/40", params?.channelId === channel.id && "bg-[#7567ff]/10 text-[#7567ff] dark:text-[#a39bff]")}>
+        <Icon className="h-4 w-4" />
+      </span>
       <p className={cn(
-        "line-clamp-1 font-semibold text-sm text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-400 dark:group-hover:text-zinc-300 transition",
-        params?.channelId === channel.id && "text-primary dark:text-zinc-200 dark:group-hover:text-white"
+        "line-clamp-1 text-left text-sm font-semibold text-foreground/80 transition group-hover:text-foreground",
+        params?.channelId === channel.id && "text-[#5f50dc] dark:text-[#a39bff]"
       )}>
         {channel.name}
       </p>
+      {unreadCount > 0 && (
+        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">
+          {unreadCount > 99 ? "99+" : unreadCount}
+        </span>
+      )}
       {channel.name !== "general" && role !== MemberRole.GUEST && (
-        <div className="ml-auto flex items-center gap-x-2">
+        <div className="flex items-center gap-x-2">
           <ActionTooltip label="Edit">
             <Edit
               onClick={(e) => onAction(e, "editChannel")}
@@ -78,7 +120,7 @@ export const ServerChannel = ({
       )}
       {channel.name === "general" && (
         <Lock
-          className="ml-auto w-4 h-4 text-zinc-500 dark:text-zinc-400"
+          className="h-4 w-4 text-zinc-500 dark:text-zinc-400"
         />
       )}
     </button>

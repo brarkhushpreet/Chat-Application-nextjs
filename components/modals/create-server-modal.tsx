@@ -29,11 +29,9 @@ import { useModal } from "@/hooks/use-modal-store";
 
 const formSchema=z.object({
     name:z.string().min(1,{
-        message:"Server name is required."
+        message:"Space name is required."
     }),
-    imageUrl:z.string().min(1,{
-        message:"Server image is required."
-    })
+    imageUrl:z.string().optional()
 })
 const CreateServerModal = () => { 
     const{isOpen,onClose,type}= useModal();
@@ -74,11 +72,11 @@ const CreateServerModal = () => {
     
   return (
    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-     <DialogContent className="bg-white text-black p-0 overflow-hidden">
+     <DialogContent className="overflow-hidden border-border bg-card p-0 text-card-foreground">
         <DialogHeader className="pt-8 px-6">
-           <DialogTitle className="text-2xl text-center font-bold">Customize your server</DialogTitle>
+           <DialogTitle className="text-2xl text-center font-bold">Create your space</DialogTitle>
            <DialogDescription className="text-center text-zinc-500 ">
-            Give your server a personality with a name and an image.You can always change it later.
+            Choose a space name. Adding an image is optional, and you can change it later.
            </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -90,6 +88,9 @@ const CreateServerModal = () => {
                      name="imageUrl"
                      render={({field})=>(
                         <FormItem>
+                            <FormLabel className="text-center text-xs font-bold uppercase text-zinc-500">
+                                Space image <span className="font-normal normal-case">(optional)</span>
+                            </FormLabel>
                             <FormControl>
                                    <FileUpload
                                    endpoint="serverImage"
@@ -116,8 +117,8 @@ const CreateServerModal = () => {
                             <FormControl>
                                  <Input
                                 disabled={isLoading}
-                                className="bg-zinc-300/50 border-0 focus-visible:ring-0 text-black focus-visible:ring-offset-0"
-                                placeholder="Enter server name"
+                                className="border-border bg-background text-foreground focus-visible:ring-primary/20 focus-visible:ring-offset-0"
+                                placeholder="Enter space name"
                                 {...field}
                                 />
                             </FormControl>
@@ -126,7 +127,7 @@ const CreateServerModal = () => {
                     )}
                     />
                 </div>
-                <DialogFooter className="bg-gray-100 px-6 py-4">
+                <DialogFooter className="border-t border-border bg-muted/50 px-6 py-4">
                     <Button  variant="primary" disabled={isLoading}>Create</Button>
                 </DialogFooter>
 

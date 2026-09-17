@@ -1,4 +1,4 @@
-import { Hash } from "lucide-react";
+import { MessageCircleMore } from "lucide-react";
 import { MobileToggle } from "../mobile-toggle";
 import { UserAvatar } from "../user-avatar";
 import { SocketIndicator } from "../socket-indicator";
@@ -15,27 +15,30 @@ export const ChatHeader=(
     {serverId,name,type,imageUrl}:chatHeaderProps
 )=>{
     return(
-        <div className="text-md font-semibold px-3 flex items-center h-12 border-neutral-200 dark:border-neutral-800 border-b-2">
+        <header className="conversation-header flex h-[72px] shrink-0 items-center border-b px-4 md:px-6">
             <MobileToggle serverId={serverId}/>
             {type==="channel" &&(
-                <Hash className="w-5 h-5 text-zinc-500 dark:text-zinc-400 mr-2"/>
+                <span className="mr-3 flex h-9 w-9 items-center justify-center rounded-xl bg-[#7567ff]/10 text-[#6b5cf5] dark:text-[#9c93ff]">
+                  <MessageCircleMore className="h-4 w-4"/>
+                </span>
             )}
             {type==="conversation" &&(
                 <UserAvatar
                 src={imageUrl}
-                className="h-8 w-8 md:h-8 md:w-8 mr-2"
+                className="mr-3 h-9 w-9 ring-2 ring-black/5 md:h-9 md:w-9 dark:ring-white/10"
                 />
             )}
-             <p className="font-semibold text-md text-black dark:text-white">
-               {name}
-             </p>
-             <div className="ml-auto flex items-center">
+             <div className="min-w-0 flex-1">
+               <p className="truncate text-base font-semibold tracking-tight text-foreground">{name}</p>
+               <p className="text-xs text-muted-foreground">{type === "channel" ? "Shared room" : "Private conversation"}</p>
+             </div>
+             <div className="ml-auto flex shrink-0 items-center pl-3">
              {type === "conversation" && (
                <ChatVideoButton />
                )}
  
                 <SocketIndicator/>
              </div>
-        </div>
+        </header>
     )
 }

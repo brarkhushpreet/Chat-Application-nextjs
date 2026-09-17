@@ -7,7 +7,7 @@ interface ModalData{
     channelType?:ChannelType;
     channel?: Channel;
     apiUrl?:string,
-    query?:Record<string,any>
+    query?: Record<string, string>;
     
 }
 

@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nexus-chat",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "nexus-chat" }],
+  "durable_objects": { "bindings": [{ "name": "REALTIME", "class_name": "RealtimeHub" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RealtimeHub"] }],
+  "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "nexus-uploads" }],
+  "vars": {
+  "AUTH_TRUST_HOST": "true",
+  "AUTH_URL": "https://nexus.khushpreet.dev"
+   },
+  "observability": { "enabled": false }
+}

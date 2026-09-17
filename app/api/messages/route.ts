@@ -24,6 +24,12 @@ export async function GET(
       return new NextResponse("Channel ID missing", { status: 400 });
     }
 
+    const accessibleChannel = await db.channel.findFirst({
+      where: { id: channelId, server: { members: { some: { profileId: profile.id } } } },
+      select: { id: true },
+    });
+    if (!accessibleChannel) return new NextResponse("Forbidden", { status: 403 });
+
     let messages: Message[] = [];
 
     if (cursor) {

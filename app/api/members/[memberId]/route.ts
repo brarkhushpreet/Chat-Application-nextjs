@@ -4,9 +4,10 @@ import { NextResponse } from "next/server";
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { memberId: string } }
+  { params }: { params: Promise<{ memberId: string }> }
 ) {
   try {
+    const { memberId } = await params;
     const { searchParams } = new URL(req.url);
     const serverId = searchParams.get("serverId");
 
@@ -17,7 +18,7 @@ export async function DELETE(
     if (!serverId) {
       return new NextResponse("server id missing", { status: 400 });
     }
-    if (!params.memberId) {
+    if (!memberId) {
       return new NextResponse("member ID missing", { status: 400 });
     }
 
@@ -29,7 +30,7 @@ export async function DELETE(
       data: {
         members: {
           deleteMany: {
-            id: params.memberId,
+            id: memberId,
             profileId: {
               not: profile.id,
             },
@@ -49,7 +50,7 @@ export async function DELETE(
     });
 
     return NextResponse.json(server);
-  } catch (error) {
+  } catch {
     console.log("[MEMBER_ID_DELETE],error");
     return new NextResponse("Internal server error", { status: 500 });
   }
@@ -57,9 +58,10 @@ export async function DELETE(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { memberId: string } }
+  { params }: { params: Promise<{ memberId: string }> }
 ) {
   try {
+    const { memberId } = await params;
     const profile = await currentProfile();
     const { searchParams } = new URL(req.url);
     const { role } = await req.json();
@@ -72,7 +74,7 @@ export async function PATCH(
     if (!serverId) {
       return new NextResponse("ServerId missing", { status: 400 });
     }
-    if (!params.memberId) {
+    if (!memberId) {
       return new NextResponse("MemberId missing", { status: 400 });
     }
 
@@ -85,7 +87,7 @@ export async function PATCH(
         members: {
           update: {
             where: {
-              id: params.memberId,
+              id: memberId,
               profileId: {
                 not: profile.id,
               },

@@ -24,6 +24,15 @@ export async function GET(
       return new NextResponse("Conversation ID missing", { status: 400 });
     }
 
+    const accessibleConversation = await db.conversation.findFirst({
+      where: { id: conversationId, OR: [
+        { memberOne: { profileId: profile.id } },
+        { memberTwo: { profileId: profile.id } },
+      ] },
+      select: { id: true },
+    });
+    if (!accessibleConversation) return new NextResponse("Forbidden", { status: 403 });
+
     let messages: DirectMessage[] = [];
 
     if (cursor) {

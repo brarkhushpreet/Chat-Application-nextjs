@@ -1,0 +1,8 @@
+# Copy to .dev.vars yourself for local Wrangler preview. Never commit secrets.
+DATABASE_URL="postgresql://USER:PASSWORD@YOUR-NEON-HOST.neon.tech/neondb?sslmode=require"
+AUTH_SECRET="replace-with-a-long-random-secret"
+AUTH_GITHUB_ID=""
+AUTH_GITHUB_SECRET=""
+TURN_KEY_ID=""
+TURN_API_TOKEN=""
+# Preview uses http://localhost:8787; leave AUTH_URL unset for that.

@@ -89,10 +89,10 @@ const ManageMembersModal = () => {
 
   return (
    <Dialog open={isModalOpen} onOpenChange={onClose}>
-     <DialogContent className="bg-white text-black  overflow-hidden">
+     <DialogContent className="overflow-hidden border-border bg-card text-card-foreground">
         <DialogHeader className="pt-8 px-6">
-           <DialogTitle className="text-2xl text-center font-bold">Manage members</DialogTitle>
-           <DialogDescription className="text-center text-zinc-500">{server?.members?.length} members</DialogDescription>
+           <DialogTitle className="text-2xl text-center font-bold">Manage people</DialogTitle>
+           <DialogDescription className="text-center text-zinc-500">{server?.members?.length} people in this space</DialogDescription>
        </DialogHeader>
        <ScrollArea className="mt-8 max-h-[420px] pr-6">
         {server?.members?.map((member)=>(

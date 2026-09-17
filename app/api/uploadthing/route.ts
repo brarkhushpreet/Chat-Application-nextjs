@@ -1,9 +1,3 @@
-import { createRouteHandler } from "uploadthing/next";
- 
-import { ourFileRouter } from "./core";
- 
-// Export routes for Next App Router
-export const { GET, POST } = createRouteHandler({
-  router: ourFileRouter,
- 
-});
+// Old clients receive a clear response after the R2 migration.
+export function POST() { return Response.json({ error: "Uploads moved to /api/uploads. Refresh the application." }, { status: 410 }); }
+export const GET = POST;

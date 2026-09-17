@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
 }
  
 model Profile {
@@ -58,6 +57,8 @@ model Member {
 
   messages Message[]
   directMessages DirectMessage[]
+  channelReadStates ChannelReadState[]
+  conversationReadStates ConversationReadState[]
 
   conversationsInitiated Conversation[] @relation("MemberOne")
   conversationsReceived Conversation[] @relation("MemberTwo")
@@ -87,6 +88,7 @@ model Channel {
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
 
   messages Message[]
+  readStates ChannelReadState[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -108,6 +110,9 @@ model Message {
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   deleted Boolean @default(false)
+  deliveredAt DateTime?
+  readAt DateTime?
+  editedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,6 +131,7 @@ model Conversation {
   memberTwo Member @relation("MemberTwo", fields: [memberTwoId], references: [id], onDelete: Cascade)
 
   directMessages DirectMessage[]
+  readStates ConversationReadState[]
 
   @@index([memberTwoId])
 
@@ -144,10 +150,94 @@ model DirectMessage {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   deleted Boolean @default(false)
+  deliveredAt DateTime?
+  readAt DateTime?
+  editedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([memberId])
   @@index([conversationId])
+}
+
+model ChannelReadState {
+  id String @id @default(cuid())
+
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  channelId String
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  lastReadAt DateTime @default(now())
+
+  @@unique([memberId, channelId])
+  @@index([channelId])
+}
+
+model ConversationReadState {
+  id String @id @default(cuid())
+
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  conversationId String
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  lastReadAt DateTime @default(now())
+
+  @@unique([memberId, conversationId])
+  @@index([conversationId])
+}
+
+// Auth.js owns these identity records. Profile remains separate so identity
+// migrations do not introduce a failing foreign key for existing profiles.
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?   @db.Text
+  passwordHash  String?
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
 }

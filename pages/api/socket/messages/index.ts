@@ -2,17 +2,18 @@ import { currentProfilePages } from "@/lib/current-profile-pages";
 import { db } from "@/lib/db";
 import { NextApiResponseServerIo } from "@/types";
 import { NextApiRequest } from "next";
+import { emitChatEvent, emitUserEvent, isUserOnline } from "@/lib/realtime";
 
 export default async function handler(
     req:NextApiRequest,res:NextApiResponseServerIo
 ){
     if(req.method!="POST"){
-        res.status(405).json({error : "method not allowed"});
+        return res.status(405).json({error : "method not allowed"});
     }
 
     try {
 
-        const profile= await currentProfilePages(req);
+        const profile= await currentProfilePages(req, res);
         const {content,fileUrl}= req.body;
         const {serverId,channelId}=req.query;
 
@@ -40,7 +41,11 @@ export default async function handler(
                 }
             },
             include:{
-                members:true
+                members:{
+                    include:{
+                        profile:true,
+                    }
+                }
             }
         });
         if(!server){
@@ -64,12 +69,18 @@ export default async function handler(
             return res.status(404).json({error:"member not found"});
         }
 
+        const recipientUserIds = server.members
+            .filter((serverMember) => serverMember.id !== member.id)
+            .map((serverMember) => serverMember.profile.userId);
+        const deliveredAt = (await Promise.all(recipientUserIds.map(isUserOnline))).some(Boolean) ? new Date() : null;
+
         const message= await db.message.create({
             data:{
                 content,
                 fileUrl,
                 channelId:channelId as string,
                 memberId:member.id as string,
+                deliveredAt,
             },
 
             include:{
@@ -81,9 +92,18 @@ export default async function handler(
             }
         });
 
-        const key=`chat:${channelId}:message`;
+        const key=`chat:${channelId}:messages`;
 
-        res?.socket?.server?.io?.emit(key,message);
+        for (const userId of recipientUserIds) {
+            await emitUserEvent(userId, "sidebar:message", {
+                kind: "channel",
+                roomId: channelId as string,
+                messageId: message.id,
+                createdAt: message.createdAt,
+            });
+        }
+
+        await emitChatEvent(channelId as string, key, message);
 
         return res.status(200).json(message);
 

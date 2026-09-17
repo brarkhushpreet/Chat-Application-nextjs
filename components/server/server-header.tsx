@@ -32,10 +32,15 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="focus:outline-none" asChild>
-        <button className="w-full text-md font-semibold px-3 flex items-center h-12 border-neutral-200 dark:border-neutral-800 border-b-2 hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition">
-          {server.name}
-          <ChevronDown className="h-5 w-5 ml-auto" />
+      <DropdownMenuTrigger className="focus-visible:ring-2 focus-visible:ring-ring" asChild>
+        <button type="button" className="group flex h-[60px] w-full items-center gap-3 rounded-xl border border-transparent px-3 text-left transition-[background-color,border-color,box-shadow] duration-150 hover:border-border hover:bg-card hover:shadow-sm data-[state=open]:border-border data-[state=open]:bg-card data-[state=open]:shadow-sm">
+          <span className="min-w-0">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Current space</span>
+            <span className="mt-1 block truncate text-base font-bold tracking-tight">{server.name}</span>
+          </span>
+          <span className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors group-hover:bg-muted group-hover:text-foreground group-data-[state=open]:bg-muted group-data-[state=open]:text-foreground">
+            <ChevronDown className="h-4 w-4 transition-transform duration-150 group-data-[state=open]:rotate-180" />
+          </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56 text-xs font-medium text-black dark:text-neutral-400 space-y-[2px]">
@@ -43,7 +48,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
           <DropdownMenuItem 
            onClick={()=> onOpen("invite",{server})}
             className="text-indigo-600 dark:text-indigo-400 px-3 py-2 text-sm cursor-pointer">
-            Invite People
+            Invite people
             <UserPlus className="h-4 w-4 ml-auto " />
           </DropdownMenuItem>
         )}
@@ -52,7 +57,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
           <DropdownMenuItem 
           onClick={()=> onOpen("editServer",{server})}
           className=" px-3 py-2 text-sm cursor-pointer">
-            Server Settings
+            Space settings
             <Settings className="h-4 w-4 ml-auto " />
           </DropdownMenuItem>
         )}
@@ -61,7 +66,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
           <DropdownMenuItem
           onClick={()=> onOpen("members",{server})}
           className=" px-3 py-2 text-sm cursor-pointer">
-            Manage Members
+            Manage people
             <Users className="h-4 w-4 ml-auto " />
           </DropdownMenuItem>
         )}
@@ -70,7 +75,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
           <DropdownMenuItem 
            onClick={()=> onOpen("createChannel")}
           className=" px-3 py-2 text-sm cursor-pointer">
-            Create Channel
+            Create room
             <PlusCircle className="h-4 w-4 ml-auto " />
           </DropdownMenuItem>
         )}
@@ -81,7 +86,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
           <DropdownMenuItem 
           onClick={()=> onOpen("deleteServer",{server})}
           className="text-rose-500 dark:text-rose-400 px-3 py-2 text-sm cursor-pointer">
-            Delete Server
+            Delete space
             <Trash className="h-4 w-4 ml-auto " />
           </DropdownMenuItem>
         )}
@@ -90,7 +95,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
           <DropdownMenuItem
           onClick={()=> onOpen("leaveServer",{server})}
            className="text-rose-500 dark:text-rose-400 px-3 py-2 text-sm cursor-pointer">
-            Leave Server
+            Leave space
             <LogOut className="h-4 w-4 ml-auto " />
           </DropdownMenuItem>
         )}

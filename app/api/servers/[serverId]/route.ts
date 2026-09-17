@@ -4,9 +4,10 @@ import { NextResponse } from "next/server";
 
 export async function DELETE(
     req:Request,
-    {params}:{params:{serverId:string}}
+    { params }: { params: Promise<{ serverId: string }> }
  ){
      try {
+         const { serverId } = await params;
          const profile= await currentProfile();
          if(!profile){
              return new NextResponse("Unauthorized",{status:401});
@@ -16,7 +17,7 @@ export async function DELETE(
  
          const server= await db.server.delete({
              where:{
-                 id:params.serverId,
+                 id: serverId,
                  profileId:profile.id,
              }
          })
@@ -32,9 +33,10 @@ export async function DELETE(
 
 export async function PATCH(
    req:Request,
-   {params}:{params:{serverId:string}}
+   { params }: { params: Promise<{ serverId: string }> }
 ){
     try {
+        const { serverId } = await params;
         const profile= await currentProfile();
         if(!profile){
             return new NextResponse("Unauthorized",{status:401});
@@ -44,7 +46,7 @@ export async function PATCH(
 
         const server= await db.server.update({
             where:{
-                id:params.serverId,
+                id: serverId,
                 profileId:profile.id,
             },
             data:{

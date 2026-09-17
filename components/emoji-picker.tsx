@@ -1,9 +1,6 @@
 "use client";
 
 import { Smile } from "lucide-react";
-import Picker from "@emoji-mart/react";
-import data from "@emoji-mart/data";
-import { useTheme } from "next-themes";
 
 import {
   Popover,
@@ -18,25 +15,40 @@ interface EmojiPickerProps {
 export const EmojiPicker = ({
   onChange,
 }: EmojiPickerProps) => {
-  const { resolvedTheme } = useTheme();
+  const emojis = [
+    "😀", "😄", "😂", "🥹", "😊", "😍", "🤩", "😎",
+    "🤔", "🫡", "🤝", "👏", "🙌", "👍", "🎉", "✨",
+    "🔥", "💡", "🚀", "💜", "✅", "👀", "💯", "🌱",
+  ];
 
   return (
     <Popover>
-      <PopoverTrigger>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label="Add an emoji" className="flex h-9 w-9 items-center justify-center rounded-xl text-black/35 transition hover:bg-black/[0.04] hover:text-black/60 dark:text-white/35 dark:hover:bg-white/[0.06] dark:hover:text-white/60">
         <Smile
-          className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
+          className="h-4 w-4"
         />
+        </button>
       </PopoverTrigger>
       <PopoverContent 
-        side="right" 
-        sideOffset={40}
-        className="bg-transparent border-none shadow-none drop-shadow-none mb-16"
+        side="top"
+        align="end"
+        sideOffset={12}
+        className="mb-1 w-64 rounded-2xl border-black/[0.06] bg-white/95 p-3 shadow-2xl backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#181b23]/95"
       >
-        <Picker
-          theme={resolvedTheme}
-          data={data}
-          onEmojiSelect={(emoji: any) => onChange(emoji.native)}
-        />
+        <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-black/35 dark:text-white/35">Quick reactions</p>
+        <div className="grid grid-cols-8 gap-1">
+          {emojis.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => onChange(emoji)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-lg transition hover:scale-110 hover:bg-black/[0.05] dark:hover:bg-white/[0.07]"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
       </PopoverContent>
     </Popover>
   )

@@ -1,81 +1,171 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-body,
+@config "../tailwind.config.ts";
+@import "tailwindcss";
+/* Keep UploadThing's legacy utility rules below the app's Tailwind utilities. */
+
+:root {
+  --background: 40 20% 96%;
+  --foreground: 222 23% 19%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 24% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 24% 14%;
+  --primary: 245 54% 49%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 40 14% 92%;
+  --secondary-foreground: 224 20% 20%;
+  --muted: 40 14% 95%;
+  --muted-foreground: 222 10% 43%;
+  --accent: 247 72% 95%;
+  --accent-foreground: 247 62% 48%;
+  --destructive: 354 75% 57%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 35 12% 86%;
+  --input: 220 16% 84%;
+  --ring: 247 78% 62%;
+  --radius: 1rem;
+  --auth-field-background: #fafaf8;
+  --workspace: #eeeee9;
+  --sidebar: #f7f7f3;
+  --rail: #e7e8e2;
+  --panel: #ffffff;
+  --panel-shadow: 0 3px 16px -8px rgb(35 39 50 / 0.13);
+}
+
+.dark {
+  --background: 225 25% 7%;
+  --foreground: 220 18% 93%;
+  --card: 223 22% 10%;
+  --card-foreground: 220 18% 93%;
+  --popover: 223 20% 12%;
+  --popover-foreground: 220 18% 93%;
+  --primary: 247 84% 68%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 223 17% 16%;
+  --secondary-foreground: 220 16% 91%;
+  --muted: 223 16% 15%;
+  --muted-foreground: 220 9% 63%;
+  --accent: 247 28% 20%;
+  --accent-foreground: 247 90% 83%;
+  --destructive: 354 67% 53%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 223 15% 21%;
+  --input: 223 15% 23%;
+  --ring: 247 84% 68%;
+  --auth-field-background: #1b1f28;
+  --workspace: #0c0f15;
+  --sidebar: #121720;
+  --rail: #171c26;
+  --panel: #11161f;
+  --panel-shadow: none;
+}
+
 html,
-:root{
+body,
+:root {
   height: 100%;
 }
- 
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans), sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+.auth-page { background: hsl(var(--background)); }
+.auth-card {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  box-shadow: 0 16px 64px -32px rgb(35 39 50 / 0.22);
+}
+.auth-preview { background: hsl(var(--card)); border-color: hsl(var(--border)); box-shadow: var(--panel-shadow); }
+.workspace-shell { background: var(--workspace); }
+.space-sidebar { background: var(--sidebar); border-color: hsl(var(--border)); }
+.space-rail { background: var(--rail); border-color: hsl(var(--border)); }
+.conversation-panel { background: var(--panel); border-color: hsl(var(--border)); box-shadow: var(--panel-shadow); }
+.conversation-header { background: var(--panel); border-color: hsl(var(--border)); }
+.conversation-welcome { background: hsl(var(--muted)); border-color: hsl(var(--border)); }
+.message-received { background: hsl(var(--muted)); border-color: hsl(var(--border)); color: hsl(var(--foreground)); }
+
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 20 14.3% 4.1%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 20 14.3% 4.1%;
- 
-    --popover: 0 0% 100%;
-    --popover-foreground: 20 14.3% 4.1%;
- 
-    --primary: 24 9.8% 10%;
-    --primary-foreground: 60 9.1% 97.8%;
- 
-    --secondary: 60 4.8% 95.9%;
-    --secondary-foreground: 24 9.8% 10%;
- 
-    --muted: 60 4.8% 95.9%;
-    --muted-foreground: 25 5.3% 44.7%;
- 
-    --accent: 60 4.8% 95.9%;
-    --accent-foreground: 24 9.8% 10%;
- 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 60 9.1% 97.8%;
-
-    --border: 20 5.9% 90%;
-    --input: 20 5.9% 90%;
-    --ring: 20 14.3% 4.1%;
- 
-    --radius: 0.5rem;
-  }
- 
-  .dark {
-    --background: 20 14.3% 4.1%;
-    --foreground: 60 9.1% 97.8%;
- 
-    --card: 20 14.3% 4.1%;
-    --card-foreground: 60 9.1% 97.8%;
- 
-    --popover: 20 14.3% 4.1%;
-    --popover-foreground: 60 9.1% 97.8%;
- 
-    --primary: 60 9.1% 97.8%;
-    --primary-foreground: 24 9.8% 10%;
- 
-    --secondary: 12 6.5% 15.1%;
-    --secondary-foreground: 60 9.1% 97.8%;
- 
-    --muted: 12 6.5% 15.1%;
-    --muted-foreground: 24 5.4% 63.9%;
- 
-    --accent: 12 6.5% 15.1%;
-    --accent-foreground: 60 9.1% 97.8%;
- 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 60 9.1% 97.8%;
- 
-    --border: 12 6.5% 15.1%;
-    --input: 12 6.5% 15.1%;
-    --ring: 24 5.7% 82.9%;
+  :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 3px;
   }
 }
- 
-@layer base {
-  * {
-    @apply border-border;
+
+.auth-field {
+  background: var(--auth-field-background);
+  border-color: hsl(var(--input));
+}
+
+.auth-field:focus-within {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.12);
+}
+
+.auth-field input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.auth-field input:is(:autofill, :-webkit-autofill) {
+  -webkit-box-shadow: 0 0 0 1000px var(--auth-field-background) inset;
+  box-shadow: 0 0 0 1000px var(--auth-field-background) inset;
+  -webkit-text-fill-color: hsl(var(--foreground));
+  caret-color: hsl(var(--foreground));
+}
+
+::selection {
+  background: rgba(109, 93, 252, 0.28);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(127, 127, 127, 0.28) transparent;
+}
+
+.app-grain::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.08'/%3E%3C/svg%3E");
+}
+
+.call-glow {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(109, 93, 252, 0.07), transparent 65%);
+}
+
+.dark .call-glow {
+  background:
+    radial-gradient(circle at 15% 20%, rgba(109, 93, 252, 0.12), transparent 36%),
+    radial-gradient(circle at 84% 72%, rgba(40, 198, 164, 0.08), transparent 32%);
+}
+
+@keyframes soft-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
   }
-  body {
-    @apply bg-background text-foreground;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.soft-in {
+  animation: soft-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soft-in {
+    animation: none;
   }
 }

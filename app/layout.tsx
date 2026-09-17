@@ -1,8 +1,7 @@
 
 import type { Metadata } from "next";
-import { Open_Sans } from "next/font/google";
+import { Manrope } from "next/font/google";
 import "./globals.css";
-import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/provider/theme-provider";
 import { cn } from "@/lib/utils";
 import { ModalProvider } from "@/components/provider/modal-provider";
@@ -10,11 +9,11 @@ import { SocketProvider } from "@/components/provider/socket-provider";
 import { QueryProvider } from "@/components/provider/query-provider";
 
 
-const sans =Open_Sans({ subsets: ["latin"] });
+const sans = Manrope({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "Chat Application",
-  description: "For learning and educational purposes only",
+  title: "Nexus — conversations with momentum",
+  description: "A realtime space for thoughtful teams, chats, and huddles.",
 };
 
 export default function RootLayout({
@@ -23,15 +22,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider >
     <html lang="en"  suppressHydrationWarning>
-      <body className={cn(sans.className,
-      "bg-white dark:bg-[#313338]")}>
+      <body className={cn(sans.className, sans.variable)}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="light"
           enableSystem={false}
-          storageKey="chat-application"
+          storageKey="nexus-theme"
         >
         <SocketProvider>
         <ModalProvider/>
@@ -42,6 +39,5 @@ export default function RootLayout({
         </ThemeProvider>
         </body>
     </html>
-    </ClerkProvider>
   );
 }

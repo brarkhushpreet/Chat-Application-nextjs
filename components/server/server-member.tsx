@@ -2,9 +2,11 @@
 
 import { cn } from "@/lib/utils";
 import { Member, MemberRole, Profile, Server } from "@prisma/client"
-import { ShieldAlert, ShieldCheck } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { LoaderCircle, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { UserAvatar } from "../user-avatar";
+import { startConversation } from "@/lib/start-conversation";
 
 interface serverMemberProps {
   member: Member & {profile:Profile};
@@ -19,40 +21,44 @@ const roleIconMap={
 
 export const ServerMember=({
 member,
-server
+server,
 }:serverMemberProps)=>{
-
-    const params= useParams();
+    const [isStarting, setIsStarting] = useState(false);
     const router= useRouter();
     
 
 
     const icon= roleIconMap[member.role];
 
-    const onClick = () => {
-      router.push(`/servers/${params?.serverId}/conversations/${member.id}`)
+    const onClick = async () => {
+      try {
+        setIsStarting(true);
+        await startConversation(server.id, member.id);
+        router.push(`/servers/${server.id}/conversations/${member.id}`);
+      } finally {
+        setIsStarting(false);
+      }
     }
   
  return (
-   <button  onClick={onClick}
+   <button onClick={onClick} disabled={isStarting}
     className={cn(
-        "group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/50 dark:hover:bg-zinc-700/50 transition mb-1",
-         params?.memberId ===member.id && "bg-zinc-700/20 dark:bg-zinc-700"
+        "group mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-foreground/[0.04] disabled:opacity-60 dark:hover:bg-white/[0.055]"
     )}
    >
     <UserAvatar 
     src={member.profile.imageUrl}
-     className="h-8 w-8 md:h-8 md:w-8"
+     className="h-8 w-8 ring-2 ring-white/50 md:h-8 md:w-8 dark:ring-white/10"
     />
     <p
     className={cn(
-        "font-semibold text-sm text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-400 dark:group-hover:text-zinc-300 transition",
-        params?.channelId ===member.id && "text-primary dark:text-zinc-200 dark:group-hover:text-white"
+        "truncate text-sm font-semibold text-foreground/80 transition group-hover:text-foreground",
     )}
     >
         {member.profile.name}
     </p>
     {icon}
+    {isStarting && <LoaderCircle className="ml-auto h-3.5 w-3.5 animate-spin" />}
    </button>
  )
 }

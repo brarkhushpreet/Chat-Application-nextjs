@@ -62,7 +62,7 @@ export const ChatMessages = ({
     paramKey,
     paramValue,
   });
-  useChatSocket({ queryKey, addKey, updateKey });
+  useChatSocket({ queryKey, addKey, updateKey, roomId: chatId, kind: type });
   useChatScroll({
     chatRef,
     bottomRef,
@@ -94,7 +94,7 @@ export const ChatMessages = ({
   }
 
   return (
-    <div ref={chatRef} className="flex-1 flex flex-col py-4 overflow-y-auto">
+    <div ref={chatRef} className="flex flex-1 flex-col overflow-y-auto py-5">
       {!hasNextPage && <div className="flex-1" />}
       {!hasNextPage && (
         <ChatWelcome
@@ -107,9 +107,9 @@ export const ChatMessages = ({
           {isFetchingNextPage ? (
             <Loader2 className="h-6 w-6 text-zinc-500 animate-spin my-4" />
           ) : (
-            <button
+          <button
               onClick={() => fetchNextPage()}
-              className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 text-xs my-4 dark:hover:text-zinc-300 transition"
+              className="my-4 rounded-full border border-black/[0.06] bg-white px-4 py-2 text-xs font-semibold text-black/45 transition hover:text-black/70 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white/45 dark:hover:text-white/70"
             >
               Load previous messages
             </button>
@@ -129,7 +129,9 @@ export const ChatMessages = ({
                 fileUrl={message.fileUrl}
                 deleted={message.deleted}
                 timestamp={format(new Date(message.createdAt), DATE_FORMAT)}
-                isUpdated={message.updatedAt !== message.createdAt}
+                isUpdated={Boolean(message.editedAt)}
+                deliveredAt={message.deliveredAt}
+                readAt={message.readAt}
                 socketUrl={socketUrl}
                 socketQuery={socketQuery}
               />

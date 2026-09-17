@@ -37,11 +37,11 @@ import { useEffect } from "react";
 
 const formSchema = z.object({
   name: z.string().min(1, {
-    message: "Channel name is required."
+    message: "Room name is required."
   }).refine(
     name => name !== "general",
     {
-      message: "Channel name cannot be 'general'"
+      message: "Room name cannot be 'general'"
     }
   ),
   type: z.nativeEnum(ChannelType)
@@ -98,10 +98,10 @@ export const CreateChannelModal = () => {
 
   return (
     <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-white text-black p-0 overflow-hidden">
+      <DialogContent className="overflow-hidden border-border bg-card p-0 text-card-foreground">
         <DialogHeader className="pt-8 px-6">
           <DialogTitle className="text-2xl text-center font-bold">
-            Create Channel
+            Create room
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
@@ -115,13 +115,13 @@ export const CreateChannelModal = () => {
                     <FormLabel
                       className="uppercase text-xs font-bold text-zinc-500 dark:text-secondary/70"
                     >
-                      Channel name
+                      Room name
                     </FormLabel>
                     <FormControl>
                       <Input
                         disabled={isLoading}
-                        className="bg-zinc-300/50 border-0 focus-visible:ring-0 text-black focus-visible:ring-offset-0"
-                        placeholder="Enter channel name"
+                        className="border-border bg-background text-foreground focus-visible:ring-primary/20 focus-visible:ring-offset-0"
+                        placeholder="Enter room name"
                         {...field}
                       />
                     </FormControl>
@@ -134,7 +134,7 @@ export const CreateChannelModal = () => {
                 name="type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Channel Type</FormLabel>
+                    <FormLabel>Room type</FormLabel>
                     <Select
                       disabled={isLoading}
                       onValueChange={field.onChange}
@@ -142,9 +142,9 @@ export const CreateChannelModal = () => {
                     >
                       <FormControl>
                         <SelectTrigger
-                          className="bg-zinc-300/50 border-0 focus:ring-0 text-black ring-offset-0 focus:ring-offset-0 capitalize outline-none"
+                          className="border-border bg-background text-foreground ring-offset-0 focus:ring-primary/20 focus:ring-offset-0 capitalize outline-none"
                         >
-                          <SelectValue placeholder="Select a channel type" />
+                          <SelectValue placeholder="Select a room type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -164,7 +164,7 @@ export const CreateChannelModal = () => {
                 )}
               />
             </div>
-            <DialogFooter className="bg-gray-100 px-6 py-4">
+            <DialogFooter className="border-t border-border bg-muted/50 px-6 py-4">
               <Button variant="primary" disabled={isLoading}>
                 Create
               </Button>

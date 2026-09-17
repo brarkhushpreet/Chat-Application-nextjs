@@ -30,10 +30,10 @@ import { useEffect } from "react";
 
 const formSchema=z.object({
     name:z.string().min(1,{
-        message:"Server name is required."
+        message:"Space name is required."
     }),
     imageUrl:z.string().min(1,{
-        message:"Server image is required."
+        message:"Space image is required."
     })
 })
 const EditServerModal = () => { 
@@ -85,9 +85,9 @@ const EditServerModal = () => {
     
   return (
    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-     <DialogContent className="bg-white text-black p-0 overflow-hidden">
+     <DialogContent className="overflow-hidden border-border bg-card p-0 text-card-foreground">
         <DialogHeader className="pt-8 px-6">
-           <DialogTitle className="text-2xl text-center font-bold">Customize your server</DialogTitle>
+           <DialogTitle className="text-2xl text-center font-bold">Edit your space</DialogTitle>
            <DialogDescription className="text-center text-zinc-500 ">
               Edit your server with a different name or image
            </DialogDescription>
@@ -127,8 +127,8 @@ const EditServerModal = () => {
                             <FormControl>
                                  <Input
                                 disabled={isLoading}
-                                className="bg-zinc-300/50 border-0 focus-visible:ring-0 text-black focus-visible:ring-offset-0"
-                                placeholder="Enter server name"
+                                className="border-border bg-background text-foreground focus-visible:ring-primary/20 focus-visible:ring-offset-0"
+                                placeholder="Enter space name"
                                 {...field}
                                 />
                             </FormControl>
@@ -137,7 +137,7 @@ const EditServerModal = () => {
                     )}
                     />
                 </div>
-                <DialogFooter className="bg-gray-100 px-6 py-4">
+                <DialogFooter className="border-t border-border bg-muted/50 px-6 py-4">
                     <Button  variant="primary" disabled={isLoading}>Save</Button>
                 </DialogFooter>
 

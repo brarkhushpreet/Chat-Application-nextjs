@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarImage } from "./ui/avatar";
+import { UserRound } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 
 interface userAvatarProps{
     src?:string;
@@ -14,7 +15,10 @@ export const UserAvatar=(
               className             
 
             )}>
-                <AvatarImage src={src}/>
+                <AvatarImage src={src} className="object-cover" />
+                <AvatarFallback className="bg-[#7567ff]/12 text-[#6959f6] dark:text-[#a39bff]">
+                  <UserRound className="h-1/2 w-1/2" />
+                </AvatarFallback>
             </Avatar>
         )
 
