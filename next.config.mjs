@@ -26,6 +26,7 @@ const nextConfig = {
             },
           ],
     },
+    serverExternalPackages: ["@prisma/client", ".prisma/client"],
     allowedDevOrigins: [...new Set(["localhost", ...localAddresses])],
 
 };
