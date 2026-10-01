@@ -7,6 +7,7 @@ import { Server as SocketIOServer, type Socket } from "socket.io";
 
 import { callRoom, chatRoom, registerRealtimeServer, userRoom } from "./lib/realtime";
 import { CallInvitations, callAudience, type PendingCall } from "./lib/call-invitations";
+import { validIceBatch } from "./lib/call-peer";
 
 type RoomKind = "channel" | "conversation";
 
@@ -408,15 +409,17 @@ async function start() {
       socket.to(callRoom(roomId)).emit("call:peer-left", socket.id);
     });
 
-    for (const event of ["call:offer", "call:answer", "call:ice"] as const) {
+    for (const event of ["call:offer", "call:answer", "call:ice", "call:ice-batch", "call:restart"] as const) {
       socket.on(
         event,
-        (payload: { roomId?: string; target?: string; data?: unknown }) => {
+        (payload: { roomId?: string; target?: string; data?: unknown }, acknowledge?: (result: { ok: boolean }) => void) => {
           const { roomId, target, data } = payload ?? {};
           if (!roomId || !target || !isSocketInCall(socket.id, roomId) || !isSocketInCall(target, roomId)) {
-            return;
+            acknowledge?.({ ok: false }); return;
           }
+          if (event === "call:ice-batch" && !validIceBatch(data)) { acknowledge?.({ ok: false }); return; }
           io.to(target).emit(event, { from: socket.id, data });
+          acknowledge?.({ ok: true });
         },
       );
     }

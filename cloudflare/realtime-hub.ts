@@ -4,6 +4,7 @@ import { withDatabase } from "../lib/database-client";
 import { withDatabaseScope } from "../lib/database-scope";
 import { canAccessRoom, markRoomRead, type RoomKind } from "../lib/realtime-access";
 import { CallInvitations, callAudience, type PendingCall } from "../lib/call-invitations";
+import { validIceBatch } from "../lib/call-peer";
 
 declare const WebSocketPair: { new(): { 0: CF.WebSocket; 1: CF.WebSocket } };
 declare const WebSocketRequestResponsePair: { new(request: string, response: string): CF.WebSocketRequestResponsePair };
@@ -173,6 +174,7 @@ export class RealtimeHub {
       const p = payload as Record<string, unknown>;
       const roomId = p.roomId;
       if (typeof roomId !== "string" || roomId.length > 100) return { ok: false };
+      if (event === "call:ice-batch" && !validIceBatch(p.data)) return { ok: false };
       if (["room:join", "room:read", "call:join"].includes(event)) {
         const kind = p.kind;
         if (kind !== "channel" && kind !== "conversation") return { ok: false };
@@ -202,7 +204,7 @@ export class RealtimeHub {
       const call = c.session.call;
       if (!call || call.roomId !== roomId || !await this.database(db => canAccessRoom(db, c.session.userId, roomId, call.kind))) return { ok: false };
       if (event === "call:ring") return await this.invitations.ring(c.session.id, c.session.userId, roomId, call.kind);
-      if (["call:offer", "call:answer", "call:ice"].includes(event)) {
+      if (["call:offer", "call:answer", "call:ice", "call:ice-batch", "call:restart"].includes(event)) {
         const target = (await this.connections()).find(other => other.session.id === p.target && other.session.call?.roomId === roomId && this.alive(other));
         if (!target || !await this.database(db => canAccessRoom(db, target.session.userId, roomId, call.kind))) return { ok: false };
         await this.send(target, { event, payload: { from: c.session.id, data: p.data } });

@@ -22,9 +22,12 @@ function fixture() {
     },
   };
   const allowed = new Set(["alice", "bob"]);
+  let accessQueries = 0;
   const fakeDb = {
-    channel: { findFirst: async ({ where }: { where: { id: string; server: { members: { some: { profile: { userId: string } } } } } }) =>
-      where.id === "room" && allowed.has(where.server.members.some.profile.userId) ? { id: "room" } : null,
+    channel: { findFirst: async ({ where }: { where: { id: string; server: { members: { some: { profile: { userId: string } } } } } }) => {
+      accessQueries++;
+      return where.id === "room" && allowed.has(where.server.members.some.profile.userId) ? { id: "room" } : null;
+    },
       findUniqueOrThrow: async () => ({ name: "Video room", type: "VIDEO", serverId: "team", server: {
         members: ["alice", "bob"].map(userId => ({ profile: { userId, name: userId } })),
       } }),
@@ -41,7 +44,7 @@ function fixture() {
     headers: { "x-nexus-user": user, "x-nexus-expires": String(Date.now() + 60_000) },
     body: body === undefined ? undefined : JSON.stringify(body),
   }));
-  return { data, sockets, allowed, hub: () => hub, restart: () => { hub = makeHub(); }, request,
+  return { data, sockets, allowed, accessQueries: () => accessQueries, hub: () => hub, restart: () => { hub = makeHub(); }, request,
     connect: async (user = "alice") => (await (await request("/connect", user, {})).json()).id as string,
     event: async (id: string, user: string, event: string, payload: unknown) => (await request(`/event?sid=${id}`, user, { event, payload })).json(),
     poll: async (id: string, user: string, cursor = 0) => (await request(`/poll?sid=${id}&cursor=${cursor}`, user)).json(),
@@ -104,6 +107,23 @@ test("incoming calls reach other chats, survive hibernation, and relay decline t
   assert.equal((await f.event(eve, "eve", "call:respond", { id: incoming.message.payload.id, action: "accept" })).ok, false);
   assert.equal((await f.event(bob, "bob", "call:respond", { id: incoming.message.payload.id, action: "decline" })).ok, true);
   assert.ok((await f.poll(alice, "alice")).events.some((item: { message: { payload?: { message?: string } } }) => item.message.payload?.message === "bob is busy right now."));
+});
+
+test("ICE batches authorize both peers once per batch and immediately reject revoked membership", async () => {
+  const f = fixture(); const alice = await f.connect(); const bob = await f.connect("bob");
+  for (const [id, user] of [[alice, "alice"], [bob, "bob"]])
+    await f.event(id, user, "call:join", { roomId: "room", kind: "channel" });
+  const before = f.accessQueries();
+  const payload = { roomId: "room", target: bob, data: Array.from({ length: 16 }, (_, i) => ({ candidate: `fixture-${i}` })) };
+  assert.equal((await f.event(alice, "alice", "call:ice-batch", payload)).ok, true);
+  assert.equal(f.accessQueries() - before, 2, "16 candidates need two checks, not 32");
+  assert.ok((await f.poll(bob, "bob")).events.some((item: { message: { event: string } }) => item.message.event === "call:ice-batch"));
+  const current = f.accessQueries();
+  assert.equal((await f.event(alice, "alice", "call:ice-batch", { ...payload, data: Array(17).fill({ candidate: "fixture" }) })).ok, false);
+  assert.equal(f.accessQueries(), current);
+  f.allowed.delete("bob");
+  assert.equal((await f.event(alice, "alice", "call:ice-batch", payload)).ok, false);
+  assert.equal((await f.event(alice, "alice", "call:restart", { ...payload, data: {} })).ok, false);
 });
 
 test("websocket commands acknowledge and retain attachments after object restart", async () => {

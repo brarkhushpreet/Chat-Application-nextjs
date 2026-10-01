@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "@/components/provider/socket-provider";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
+import { CallPeer, callVideoConstraints, playCallMedia, validIceBatch, type PeerStatus } from "@/lib/call-peer";
 
 type RoomKind = "channel" | "conversation";
 
@@ -31,6 +32,7 @@ type CallParticipant = {
   videoEnabled: boolean;
   screenSharing: boolean;
   stream?: MediaStream;
+  mediaStatus?: PeerStatus;
 };
 
 type CallError = {
@@ -132,11 +134,17 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
     const peers = peersRef.current;
     const participantDetails = participantDetailsRef.current;
 
-    const flushCandidates = async (peerId: string, peer: RTCPeerConnection) => {
-      const queued = candidatesRef.current.get(peerId) ?? [];
-      candidatesRef.current.delete(peerId);
-      await Promise.all(queued.map((candidate) => peer.addIceCandidate(candidate)));
-    };
+    const sessions = new Map<string, CallPeer>();
+    let refreshingIce: Promise<RTCIceServer[]> | undefined;
+    const refreshIce = () => refreshingIce ??= getIceServers(chatId, roomKind).then(servers => {
+      iceServersRef.current = servers; return servers;
+    }).finally(() => { refreshingIce = undefined; });
+    const sendSignal = (target: string, event: string, data: unknown) => new Promise<void>((resolve, reject) => {
+      if (disposed || !socket.connected) { reject(new Error("Signaling disconnected")); return; }
+      socket.timeout(10_000).emit(event, { roomId: chatId, target, data }, (error: Error | null, result?: { ok: boolean }) => {
+        if (error || !result?.ok) reject(new Error("Signaling unavailable")); else resolve();
+      });
+    });
 
     const createPeer = (participant: CallParticipant) => {
       const existing = peersRef.current.get(participant.socketId);
@@ -153,43 +161,33 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
         peer.addTransceiver("video", { direction: "sendrecv" });
       }
 
-      peer.onicecandidate = ({ candidate }) => {
-        if (candidate) {
-          socket.emit("call:ice", {
-            roomId: chatId,
-            target: participant.socketId,
-            data: candidate.toJSON(),
-          });
-        }
-      };
-
-      peer.ontrack = ({ streams }) => {
-        const details = participantDetailsRef.current.get(participant.socketId) ?? participant;
-        updateParticipant({ ...details, stream: streams[0] });
-      };
-
-      peer.onconnectionstatechange = () => {
-        if (["failed", "closed"].includes(peer.connectionState)) {
-          removeParticipant(participant.socketId);
-        }
-      };
+      const session = new CallPeer(peer, {
+        localId: socket.id!, remoteId: participant.socketId,
+        send: (event, data) => sendSignal(participant.socketId, event, data),
+        refreshIce,
+        status: mediaStatus => {
+          if (!disposed) updateParticipant({ ...(participantDetails.get(participant.socketId) ?? participant), mediaStatus });
+        },
+        stream: stream => {
+          if (!disposed) updateParticipant({ ...(participantDetails.get(participant.socketId) ?? participant), stream });
+        },
+      });
+      sessions.set(participant.socketId, session);
+      const queued = candidatesRef.current.get(participant.socketId);
+      if (queued) { candidatesRef.current.delete(participant.socketId); void session.ice(queued); }
 
       return peer;
     };
 
     const makeOffer = async (participant: CallParticipant) => {
-      const peer = createPeer(participant);
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      socket.emit("call:offer", {
-        roomId: chatId,
-        target: participant.socketId,
-        data: offer,
-      });
+      createPeer(participant);
+      await sessions.get(participant.socketId)?.offer();
     };
 
     const onPeerJoined = (participant: CallParticipant) => updateParticipant(participant);
-    const onPeerLeft = (socketId: string) => removeParticipant(socketId);
+    const onPeerLeft = (socketId: string) => {
+      sessions.get(socketId)?.close(); sessions.delete(socketId); removeParticipant(socketId);
+    };
     const onMediaState = (participant: CallParticipant) => updateParticipant(participant);
 
     const onOffer = async ({ from, data }: { from: string; data: RTCSessionDescriptionInit }) => {
@@ -202,29 +200,27 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
         videoEnabled: true,
         screenSharing: false,
       };
-      const peer = createPeer(participant);
-      await peer.setRemoteDescription(data);
-      await flushCandidates(from, peer);
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit("call:answer", { roomId: chatId, target: from, data: answer });
+      createPeer(participant);
+      await sessions.get(from)?.description(data);
     };
 
     const onAnswer = async ({ from, data }: { from: string; data: RTCSessionDescriptionInit }) => {
-      const peer = peersRef.current.get(from);
-      if (!peer) return;
-      await peer.setRemoteDescription(data);
-      await flushCandidates(from, peer);
+      await sessions.get(from)?.description(data);
     };
 
     const onIce = async ({ from, data }: { from: string; data: RTCIceCandidateInit }) => {
-      const peer = peersRef.current.get(from);
-      if (!peer?.remoteDescription) {
-        candidatesRef.current.set(from, [...(candidatesRef.current.get(from) ?? []), data]);
+      const session = sessions.get(from);
+      if (!session) {
+        if (candidatesRef.current.size < 32 || candidatesRef.current.has(from))
+          candidatesRef.current.set(from, [...(candidatesRef.current.get(from) ?? []), data].slice(-128));
         return;
       }
-      await peer.addIceCandidate(data);
+      await session.ice([data]);
     };
+    const onIceBatch = ({ from, data }: { from: string; data: unknown }) => {
+      if (validIceBatch(data)) for (const candidate of data) void onIce({ from, data: candidate });
+    };
+    const onRestart = ({ from }: { from: string }) => sessions.get(from)?.requestRestart();
 
     const bindSocketEvents = () => {
       if (socketEventsBound) return;
@@ -235,6 +231,8 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
       socket.on("call:offer", onOffer);
       socket.on("call:answer", onAnswer);
       socket.on("call:ice", onIce);
+      socket.on("call:ice-batch", onIceBatch);
+      socket.on("call:restart", onRestart);
     };
 
     const joinCall = () => {
@@ -316,7 +314,7 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
         if (disposed) return;
         const stream = await navigator.mediaDevices.getUserMedia({
           audio,
-          video: video ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+          video: video ? callVideoConstraints(window.matchMedia("(pointer: coarse)").matches) : false,
         });
 
         if (disposed) {
@@ -378,8 +376,9 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
         void startCall();
         return;
       }
-      peers.forEach((peer) => peer.close());
+      sessions.forEach(session => session.close()); sessions.clear();
       peers.clear();
+      candidatesRef.current.clear();
       participantDetails.clear();
       setParticipants([]);
       joinCall();
@@ -416,9 +415,12 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
       socket.off("call:offer", onOffer);
       socket.off("call:answer", onAnswer);
       socket.off("call:ice", onIce);
+      socket.off("call:ice-batch", onIceBatch);
+      socket.off("call:restart", onRestart);
       socket.emit("call:leave", chatId);
-      peers.forEach((peer) => peer.close());
+      sessions.forEach(session => session.close()); sessions.clear();
       peers.clear();
+      candidatesRef.current.clear();
       participantDetails.clear();
       localStreamRef.current?.getTracks().forEach((track) => track.stop());
       cameraTrackRef.current?.stop();
@@ -588,6 +590,12 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
         </div>
       </div>
 
+      {participants.some(participant => participant.mediaStatus?.detail.startsWith("Unable to connect")) && (
+        <div role="status" className="relative mx-4 mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 text-sm text-card-foreground md:mx-8">
+          Media could not connect. Try reconnecting or switch networks.
+          <button type="button" onClick={retryCall} className="shrink-0 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground">Retry call</button>
+        </div>
+      )}
       <div className="relative grid min-h-0 flex-1 auto-rows-fr grid-cols-1 gap-3 overflow-y-auto px-4 pb-28 md:grid-cols-2 md:gap-4 md:px-8 lg:grid-cols-3">
         <ParticipantTile
           name="You"
@@ -647,6 +655,7 @@ function ParticipantTile({
   videoEnabled,
   audioEnabled,
   screenSharing,
+  mediaStatus,
   muted = false,
   videoRef,
 }: Partial<CallParticipant> & {
@@ -656,9 +665,16 @@ function ParticipantTile({
 }) {
   const ownVideoRef = useRef<HTMLVideoElement>(null);
   const resolvedRef = videoRef ?? ownVideoRef;
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
 
   useEffect(() => {
-    if (resolvedRef.current) resolvedRef.current.srcObject = stream ?? null;
+    const element = resolvedRef.current;
+    if (!element) return;
+    let disposed = false;
+    element.srcObject = stream ?? null;
+    if (stream) void playCallMedia(element).then(played => { if (!disposed) setPlaybackBlocked(!played); });
+    else setPlaybackBlocked(false);
+    return () => { disposed = true; element.srcObject = null; };
   }, [resolvedRef, stream]);
 
   return (
@@ -674,6 +690,14 @@ function ParticipantTile({
           (!videoEnabled || !stream) && "opacity-0",
         )}
       />
+      {playbackBlocked && stream && (
+        <button type="button" onClick={() => {
+          const element = resolvedRef.current;
+          if (element) void playCallMedia(element).then(played => setPlaybackBlocked(!played));
+        }} className="absolute inset-x-4 top-4 z-10 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg">
+          Tap to play {muted ? "video" : "audio and video"}
+        </button>
+      )}
       {(!videoEnabled || !stream) && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="absolute h-40 w-40 rounded-full bg-[#6d5dfc]/15 blur-3xl" />
@@ -686,7 +710,8 @@ function ParticipantTile({
             <p className="text-sm font-semibold">{name}</p>
             {screenSharing && <span className="rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">Presenting</span>}
           </div>
-          <p className="text-[10px] text-white/55">{stream ? "Connected" : "Linking media"}</p>
+          <p role="status" className="text-xs text-white/80">{playbackBlocked ? "Playback paused by browser" : mediaStatus?.detail ?? (stream ? "Local preview" : "Waiting for media…")}</p>
+          {mediaStatus && <p className="text-[10px] text-white/60">Connection: {mediaStatus.connection} · ICE: {mediaStatus.ice}</p>}
         </div>
         <span className={cn("flex h-8 w-8 items-center justify-center rounded-full bg-black/30", !audioEnabled && "bg-rose-500")}>
           {audioEnabled ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
