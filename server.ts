@@ -6,6 +6,7 @@ import { getToken } from "next-auth/jwt";
 import { Server as SocketIOServer, type Socket } from "socket.io";
 
 import { callRoom, chatRoom, registerRealtimeServer, userRoom } from "./lib/realtime";
+import { CallInvitations, callAudience, type PendingCall } from "./lib/call-invitations";
 
 type RoomKind = "channel" | "conversation";
 
@@ -150,8 +151,43 @@ async function start() {
     return io.sockets.adapter.rooms.get(callRoom(roomId))?.has(targetId) ?? false;
   }
 
+  const pendingCalls = new Map<string, PendingCall>();
+  const invitations = new CallInvitations({
+    list: async () => structuredClone([...pendingCalls.values()]),
+    put: async call => { pendingCalls.set(call.id, structuredClone(call)); },
+    delete: async id => { pendingCalls.delete(id); },
+  }, {
+    connections: async () => [...io.sockets.sockets.values()].map(s => ({ id: s.id, userId: s.data.userId,
+      roomId: [...s.rooms].find(room => room.startsWith("call:"))?.slice(5) })),
+    send: async (userId, event, payload) => { io.to(userRoom(userId)).emit(event, payload); },
+    audience: (userId, roomId, kind) => callAudience(db, userId, roomId, kind),
+    allowed: canAccessRoom,
+  });
+  const invitationTimer = setInterval(() => { void invitations.expire().catch(console.error); }, 5000);
+  invitationTimer.unref();
+
   io.on("connection", async (socket: Socket<Record<string, never>, Record<string, never>, Record<string, never>, SocketData>) => {
     await socket.join(userRoom(socket.data.userId));
+
+    for (const event of ["call:sync", "call:ring", "call:respond"] as const) {
+      socket.on(event, async (payload: { roomId?: string; kind?: RoomKind; id?: string; action?: string } | undefined,
+        acknowledge?: (result: unknown) => void) => {
+        try {
+          if (event === "call:sync") return acknowledge?.(await invitations.sync(socket.data.userId));
+          if (event === "call:respond" && typeof payload?.id === "string" && payload.id.length <= 100 &&
+            (payload.action === "accept" || payload.action === "decline")) {
+            return acknowledge?.(await invitations.respond(socket.data.userId, payload.id, payload.action));
+          }
+          if (event === "call:ring" && typeof payload?.roomId === "string" && payload.roomId.length <= 100 &&
+            (payload.kind === "channel" || payload.kind === "conversation")) {
+            return acknowledge?.(await invitations.ring(socket.id, socket.data.userId, payload.roomId, payload.kind));
+          }
+          acknowledge?.({ ok: false });
+        } catch {
+          acknowledge?.({ ok: false, error: "Unable to update the call. Please retry." });
+        }
+      });
+    }
 
     const profile = await db.profile.findUnique({
       where: { userId: socket.data.userId },
@@ -367,6 +403,7 @@ async function start() {
     );
 
     socket.on("call:leave", (roomId: string) => {
+      void invitations.cancel(socket.id).catch(console.error);
       void socket.leave(callRoom(roomId));
       socket.to(callRoom(roomId)).emit("call:peer-left", socket.id);
     });
@@ -408,6 +445,7 @@ async function start() {
     );
 
     socket.on("disconnecting", () => {
+      void invitations.cancel(socket.id).catch(console.error);
       for (const joinedRoom of Array.from(socket.rooms)) {
         if (joinedRoom.startsWith("call:")) {
           socket.to(joinedRoom).emit("call:peer-left", socket.id);

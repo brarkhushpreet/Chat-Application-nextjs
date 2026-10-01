@@ -24,7 +24,11 @@ function fixture() {
   const allowed = new Set(["alice", "bob"]);
   const fakeDb = {
     channel: { findFirst: async ({ where }: { where: { id: string; server: { members: { some: { profile: { userId: string } } } } } }) =>
-      where.id === "room" && allowed.has(where.server.members.some.profile.userId) ? { id: "room" } : null },
+      where.id === "room" && allowed.has(where.server.members.some.profile.userId) ? { id: "room" } : null,
+      findUniqueOrThrow: async () => ({ name: "Video room", type: "VIDEO", serverId: "team", server: {
+        members: ["alice", "bob"].map(userId => ({ profile: { userId, name: userId } })),
+      } }),
+    },
     profile: { findUnique: async ({ where }: { where: { userId: string } }) => ({ name: where.userId, imageUrl: "" }) },
   };
   class Hub extends RealtimeHub {
@@ -87,6 +91,19 @@ test("call participants, targeted signaling, leave events and expired polling cl
   stored.seen = Date.now() - 60_000;
   await f.hub().alarm();
   assert.equal(f.data.has(`poll:${bob}`), false);
+});
+
+test("incoming calls reach other chats, survive hibernation, and relay decline to the caller", async () => {
+  const f = fixture(); const alice = await f.connect(); const bob = await f.connect("bob"); const eve = await f.connect("eve");
+  await f.event(alice, "alice", "call:join", { roomId: "room", kind: "channel" });
+  assert.equal((await f.event(alice, "alice", "call:ring", { roomId: "room" })).ok, true);
+  const incoming = (await f.poll(bob, "bob")).events.find((item: { message: { event: string } }) => item.message.event === "call:incoming");
+  assert.ok(incoming);
+  assert.equal((await f.poll(eve, "eve")).events.length, 0);
+  f.restart();
+  assert.equal((await f.event(eve, "eve", "call:respond", { id: incoming.message.payload.id, action: "accept" })).ok, false);
+  assert.equal((await f.event(bob, "bob", "call:respond", { id: incoming.message.payload.id, action: "decline" })).ok, true);
+  assert.ok((await f.poll(alice, "alice")).events.some((item: { message: { payload?: { message?: string } } }) => item.message.payload?.message === "bob is busy right now."));
 });
 
 test("websocket commands acknowledge and retain attachments after object restart", async () => {

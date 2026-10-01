@@ -3,6 +3,7 @@
 // @ts-ignore -- the build artifact does not exist on a fresh checkout
 import handler from "../.open-next/worker.js";
 import { getToken } from "next-auth/jwt";
+import { withDatabaseResponseScope } from "../lib/database-scope";
 import type { NexusCloudflareEnv } from "../lib/cloudflare";
 import type { ExecutionContext, Request as WorkerRequest } from "@cloudflare/workers-types";
 export { RealtimeHub } from "./realtime-hub";
@@ -17,7 +18,16 @@ const worker = {
       const forwarded = new Headers(request.headers);
       forwarded.set("x-forwarded-host", url.host);
       forwarded.set("x-forwarded-proto", url.protocol.slice(0, -1));
-      return handler.fetch(new Request(request, { headers: forwarded }), env, ctx);
+      return withDatabaseResponseScope(track => {
+        const trackedContext = new Proxy(ctx, {
+          get(target, property) {
+            if (property === "waitUntil") return track;
+            const value = Reflect.get(target, property);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        });
+        return handler.fetch(new Request(request, { headers: forwarded }), env, trackedContext);
+      }, task => ctx.waitUntil(task));
     }
     if (request.method !== methods[action]) return new Response("Method not allowed", { status: 405 });
     if ((request.method === "POST" || action === "socket") && request.headers.get("origin") !== url.origin) {

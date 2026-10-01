@@ -1,4 +1,5 @@
-import { db } from "./db";
+import { db as defaultDatabase } from "./db";
+import type { PrismaClient } from "@prisma/client";
 import {
   DEMO_EMAIL, DEMO_SERVER_ID, DEMO_USER_ID,
   demoPeople, demoChannels, demoMessages, demoDirectMessages,
@@ -7,7 +8,18 @@ import {
 const profileId = (key: string) => `nexus-demo-profile-${key}`;
 const memberId = (key: string) => `nexus-demo-member-${key}`;
 
-export async function ensureDemoWorkspace() {
+export async function ensureDemoWorkspace(db: PrismaClient = defaultDatabase) {
+  // Existing demos (including SQL-seeded databases) do not need dozens of
+  // upserts on every login. Preserve visitors' changes to the sample workspace.
+  const [existingGuest, existingWorkspace] = await Promise.all([
+    db.user.findUnique({ where: { id: DEMO_USER_ID }, select: { id: true, name: true, email: true } }),
+    db.server.findFirst({ where: {
+      id: DEMO_SERVER_ID,
+      members: { some: { id: memberId("guest"), role: "ADMIN", profile: { userId: DEMO_USER_ID } } },
+      channels: { some: { id: "nexus-demo-general", type: "TEXT" } },
+    }, select: { id: true } }),
+  ]);
+  if (existingGuest && existingWorkspace) return { ...existingGuest, image: "/demo/guest.svg" };
   return db.$transaction(async (tx) => {
     // One transaction makes first-time setup atomic. Stable IDs and upserts
     // make later visits repeatable without overwriting any existing chats.

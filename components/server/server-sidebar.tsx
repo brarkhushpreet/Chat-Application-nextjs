@@ -11,6 +11,8 @@ import { ServerSection } from "./server-section";
 import { ServerChannel } from "./server-channel";
 import { ServerMember } from "./server-member";
 import { ServerConversations } from "./server-conversations";
+import { cache } from "react";
+import { unreadCounts } from "@/lib/unread-counts";
 
 interface ServerSidebarProps {
   serverId: string;
@@ -29,7 +31,8 @@ const roleIconMap = {
     <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
   ),
 };
-const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
+// Desktop and mobile sidebars share data only within the same server render.
+const sidebarData = cache(async (serverId: string) => {
   const profile = await currentProfile();
 
   if (!profile) {
@@ -111,38 +114,9 @@ const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
     (member) => member.profileId !== profile.id
   );
   const role = currentMember.role;
-  const [channelUnreadCounts, conversationUnreadCounts] = await Promise.all([
-    Promise.all(
-      textChannels.map(async (channel) => [
-        channel.id,
-        await db.message.count({
-          where: {
-            channelId: channel.id,
-            memberId: { not: currentMember.id },
-            deleted: false,
-            createdAt: { gt: channelReadMap.get(channel.id) ?? new Date(0) },
-          },
-        }),
-      ] as const),
-    ),
-    Promise.all(
-      conversations.map(async (conversation) => [
-        conversation.id,
-        await db.directMessage.count({
-          where: {
-            conversationId: conversation.id,
-            memberId: { not: currentMember.id },
-            deleted: false,
-            createdAt: {
-              gt: conversationReadMap.get(conversation.id) ?? new Date(0),
-            },
-          },
-        }),
-      ] as const),
-    ),
-  ]);
-  const channelUnreadMap = new Map(channelUnreadCounts);
-  const conversationUnreadMap = new Map(conversationUnreadCounts);
+  const { channelUnreadMap, conversationUnreadMap } = await unreadCounts(
+    db, currentMember.id, textChannels, conversations, channelReadMap, conversationReadMap,
+  );
   const conversationItems = conversations.map((conversation) => ({
     conversation,
     unreadCount: conversationUnreadMap.get(conversation.id) ?? 0,
@@ -150,6 +124,14 @@ const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
   const conversationStateKey = conversationItems
     .map(({ conversation, unreadCount }) => `${conversation.id}:${unreadCount}`)
     .join("|");
+
+  return { server, currentMember, textChannels, audioChannels, videoChannels, members, role,
+    channelUnreadMap, conversationItems, conversationStateKey };
+});
+
+const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
+  const { server, currentMember, textChannels, audioChannels, videoChannels, members, role,
+    channelUnreadMap, conversationItems, conversationStateKey } = await sidebarData(serverId);
 
   return (
     <aside className="space-sidebar flex h-full w-full flex-col border-r px-3 text-foreground">

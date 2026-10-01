@@ -9,9 +9,10 @@ import { NavigationItem } from "./navigation-item";
 import { UserAvatar } from "../user-avatar";
 import { LogOut } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
+import { cache } from "react";
 
 
-const NavigationSidebar = async () => {
+const navigationData = cache(async () => {
     const profile= await currentProfile();
     if(!profile){
         return redirect("/");
@@ -25,6 +26,11 @@ const NavigationSidebar = async () => {
             }
         }
     })
+    return { profile, servers };
+});
+
+const NavigationSidebar = async () => {
+  const { profile, servers } = await navigationData();
   return (
     <aside className="space-rail flex h-full w-full flex-col items-center border-r py-4 text-foreground">
         <BrandMark className="mb-6 h-12 w-12" />

@@ -1,8 +1,9 @@
 import { auth } from "@/auth";
+import { cache } from "react";
 
 import { db } from "./db";
 
-export const currentProfile = async () => {
+export const currentProfile = cache(async () => {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
@@ -13,4 +14,4 @@ export const currentProfile = async () => {
       userId,
     },
   });
-};
+});

@@ -1,7 +1,9 @@
 import type * as CF from "@cloudflare/workers-types";
 import type { NexusCloudflareEnv } from "../lib/cloudflare";
 import { withDatabase } from "../lib/database-client";
+import { withDatabaseScope } from "../lib/database-scope";
 import { canAccessRoom, markRoomRead, type RoomKind } from "../lib/realtime-access";
+import { CallInvitations, callAudience, type PendingCall } from "../lib/call-invitations";
 
 declare const WebSocketPair: { new(): { 0: CF.WebSocket; 1: CF.WebSocket } };
 declare const WebSocketRequestResponsePair: { new(request: string, response: string): CF.WebSocketRequestResponsePair };
@@ -23,8 +25,21 @@ const json = (data: unknown, status = 200) => Response.json(data, { status });
 /** One hibernating coordinator for this portfolio deployment, not a Node server.
  * Poll sessions are persisted so fallback also survives object eviction. */
 export class RealtimeHub {
+  private invitations: CallInvitations;
   constructor(private ctx: CF.DurableObjectState, private env: NexusCloudflareEnv) {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    this.invitations = new CallInvitations({
+      list: async () => [...(await ctx.storage.list<PendingCall>({ prefix: "ring:" })).values()],
+      put: async call => { await ctx.storage.put(`ring:${call.id}`, call); await ctx.storage.setAlarm(Date.now() + 30_000); },
+      delete: async id => { await ctx.storage.delete(`ring:${id}`); },
+    }, {
+      connections: async () => (await this.connections()).filter(c => this.alive(c)).map(c => ({
+        id: c.session.id, userId: c.session.userId, roomId: c.session.call?.roomId,
+      })),
+      send: (userId, event, payload) => this.broadcast(event, payload, c => c.session.userId === userId),
+      audience: (userId, roomId, kind) => this.database(db => callAudience(db, userId, roomId, kind)),
+      allowed: (userId, roomId, kind) => this.database(db => canAccessRoom(db, userId, roomId, kind)),
+    });
   }
 
   protected database<T>(fn: Parameters<typeof withDatabase<T>>[1]) {
@@ -62,6 +77,7 @@ export class RealtimeHub {
     for (const c of await this.connections()) if (select(c)) await this.send(c, { event, payload });
   }
   private async leave(c: Connection) {
+    await this.invitations.cancel(c.session.id);
     const old = c.session.call;
     delete c.session.call;
     await this.save(c);
@@ -75,7 +91,7 @@ export class RealtimeHub {
   }
 
   async fetch(request: Request): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(() => this.handleFetch(request));
+    return this.ctx.blockConcurrencyWhile(() => withDatabaseScope(() => this.handleFetch(request)));
   }
   private async handleFetch(request: Request): Promise<Response> {
     // Internal-only routes: the public worker never forwards arbitrary paths.
@@ -143,6 +159,12 @@ export class RealtimeHub {
     if (!this.alive(c)) return { ok: false, error: "Session expired" };
     try {
       const { event, payload } = message;
+      if (event === "call:sync") return await this.invitations.sync(c.session.userId);
+      if (event === "call:respond") {
+        const p = payload as { id?: unknown; action?: unknown } | null;
+        if (typeof p?.id !== "string" || p.id.length > 100 || (p.action !== "accept" && p.action !== "decline")) return { ok: false };
+        return await this.invitations.respond(c.session.userId, p.id, p.action);
+      }
       if (event === "room:leave" && typeof payload === "string") {
         delete c.session.rooms[payload]; await this.save(c); return { ok: true };
       }
@@ -179,6 +201,7 @@ export class RealtimeHub {
       }
       const call = c.session.call;
       if (!call || call.roomId !== roomId || !await this.database(db => canAccessRoom(db, c.session.userId, roomId, call.kind))) return { ok: false };
+      if (event === "call:ring") return await this.invitations.ring(c.session.id, c.session.userId, roomId, call.kind);
       if (["call:offer", "call:answer", "call:ice"].includes(event)) {
         const target = (await this.connections()).find(other => other.session.id === p.target && other.session.call?.roomId === roomId && this.alive(other));
         if (!target || !await this.database(db => canAccessRoom(db, target.session.userId, roomId, call.kind))) return { ok: false };
@@ -200,7 +223,7 @@ export class RealtimeHub {
   }
 
   async webSocketMessage(socket: CF.WebSocket, data: string | ArrayBuffer) {
-    return this.ctx.blockConcurrencyWhile(() => this.handleMessage(socket, data));
+    return this.ctx.blockConcurrencyWhile(() => withDatabaseScope(() => this.handleMessage(socket, data)));
   }
   private async handleMessage(socket: CF.WebSocket, data: string | ArrayBuffer) {
     if (typeof data !== "string" || data.length > 65_536) { socket.close(1009, "Event too large"); return; }
@@ -217,7 +240,10 @@ export class RealtimeHub {
   async alarm() {
     await this.ctx.blockConcurrencyWhile(async () => {
       for (const c of await this.connections()) if (!this.alive(c)) await this.remove(c);
-      if ((await this.connections()).some(c => !c.socket)) await this.ctx.storage.setAlarm(Date.now() + 45_000);
+      await this.invitations.expire();
+      if ((await this.connections()).some(c => !c.socket) || (await this.ctx.storage.list({ prefix: "ring:" })).size) {
+        await this.ctx.storage.setAlarm(Date.now() + 15_000);
+      }
     });
   }
 }

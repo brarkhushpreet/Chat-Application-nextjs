@@ -7,8 +7,8 @@ const localDatabase = () => local.prisma ??= createDatabase(
   process.env.DATABASE_URL ?? "postgresql://localhost:5432/nexus_chat",
 );
 
-// Cloudflare operations own their connections; interactive transactions retain
-// one client until their callback finishes. Local Node keeps its normal pool.
+// Cloudflare reuses one client inside each request/event scope (including
+// transactions), never across requests. Local Node keeps its normal pool.
 export const db = new Proxy({} as PrismaClient, {
   get(_target, model: string) {
     const env = cloudflareEnv();

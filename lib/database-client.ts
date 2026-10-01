@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { neonConfig } from "@neondatabase/serverless";
+import { scopedDatabase } from "./database-scope";
 
 export function createDatabase(connectionString: string) {
   const isNeon = new URL(connectionString).hostname.endsWith(".neon.tech");
@@ -13,6 +14,8 @@ export function createDatabase(connectionString: string) {
 }
 
 export async function withDatabase<T>(connectionString: string, operation: (db: PrismaClient) => Promise<T>) {
+  const scoped = scopedDatabase(() => createDatabase(connectionString));
+  if (scoped) return operation(scoped);
   const client = createDatabase(connectionString);
   try {
     return await operation(client);

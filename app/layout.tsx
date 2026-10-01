@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { ModalProvider } from "@/components/provider/modal-provider";
 import { SocketProvider } from "@/components/provider/socket-provider";
 import { QueryProvider } from "@/components/provider/query-provider";
+import { IncomingCallNotification } from "@/components/incoming-call-notification";
 
 
 const sans = Manrope({ subsets: ["latin"], variable: "--font-sans" });
@@ -31,6 +32,7 @@ export default function RootLayout({
           storageKey="nexus-theme"
         >
         <SocketProvider>
+        <IncomingCallNotification />
         <ModalProvider/>
         <QueryProvider>
         {children}

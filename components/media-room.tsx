@@ -79,6 +79,15 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
   const [status, setStatus] = useState<"joining" | "joined" | "error">("joining");
   const [error, setError] = useState<CallError | null>(null);
   const [retrySequence, setRetrySequence] = useState(0);
+  const invitedRoomRef = useRef<string | null>(null);
+  const [invitationStatus, setInvitationStatus] = useState<string | null>(null);
+  useEffect(() => {
+    const onStatus = ({ roomId, message }: { roomId: string; message: string }) => {
+      if (roomId === chatId) setInvitationStatus(message);
+    };
+    socket?.on("call:ring-status", onStatus);
+    return () => { socket?.off("call:ring-status", onStatus); };
+  }, [socket, chatId]);
 
   const updateParticipant = useCallback((participant: CallParticipant) => {
     const previous = participantDetailsRef.current.get(participant.socketId);
@@ -263,6 +272,17 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
             return;
           }
           setStatus("joined");
+          if (invitedRoomRef.current !== chatId) {
+            invitedRoomRef.current = chatId;
+            // Accepting an invitation joins the caller; it must not ring them back.
+            const accepted = new URLSearchParams(window.location.search).has("incomingCall");
+            if (!accepted && !result.peers?.length) {
+              socket.timeout(10_000).emit("call:ring", { roomId: chatId, kind: roomKind },
+                (ringError: Error | null, reply?: { ok: boolean }) => {
+                  if (!disposed && (ringError || !reply?.ok)) setInvitationStatus("Could not ring other members. Leave and retry the call.");
+                });
+            }
+          }
           socket.emit("call:media-state", {
             roomId: chatId,
             audioEnabled: audio,
@@ -496,6 +516,8 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
   };
 
   const retryCall = () => {
+    invitedRoomRef.current = null;
+    setInvitationStatus(null);
     setLocalStream(null);
     setParticipants([]);
     setError(null);
@@ -584,7 +606,7 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
             <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-black/5 dark:bg-white/5">
               <Users className="h-5 w-5 text-black/45 dark:text-white/45" />
             </span>
-            <p className="text-sm font-semibold">The room is yours</p>
+            <p role="status" className="text-sm font-semibold">{invitationStatus ?? "The room is yours"}</p>
             <p className="mt-1 max-w-[240px] text-xs leading-5 text-black/45 dark:text-white/45">
               Other members will appear here the moment they join this huddle.
             </p>
