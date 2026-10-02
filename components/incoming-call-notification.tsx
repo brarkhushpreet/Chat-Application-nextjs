@@ -7,6 +7,7 @@ import { useSocket } from "@/components/provider/socket-provider";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import type { IncomingCall } from "@/lib/call-invitations";
+import { respondToCall } from "@/lib/call-response";
 
 export function IncomingCallNotification() {
   const { socket, isConnected } = useSocket();
@@ -15,6 +16,7 @@ export function IncomingCallNotification() {
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const dismissed = useRef(new Set<string>());
+  const answering = useRef<string | null>(null);
 
   useEffect(() => {
     if (!socket) return;
@@ -24,6 +26,9 @@ export function IncomingCallNotification() {
       setPending(false);
     };
     const dismiss = ({ id }: { id: string }) => {
+      // The server broadcasts dismissal to all tabs before sending the ACK.
+      // Keep this tab's pending prompt until its response/retry completes.
+      if (answering.current === id) return;
       dismissed.current.add(id);
       if (dismissed.current.size > 128) dismissed.current.delete(dismissed.current.values().next().value!);
       setIncoming(current => current?.id === id ? null : current);
@@ -60,22 +65,28 @@ export function IncomingCallNotification() {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  const respond = (action: "accept" | "decline") => {
-    if (!socket || !incoming || pending || !isConnected) return;
+  const respond = async (action: "accept" | "decline") => {
+    if (!socket || !incoming || answering.current || pending || !isConnected) return;
     const call = incoming;
+    answering.current = call.id;
     setPending(true);
-    socket.timeout(10_000).emit("call:respond", { id: call.id, action },
-      (error: Error | null, result?: { ok: boolean; url?: string; error?: string }) => {
-        setPending(false);
-        if (error || !result?.ok) {
-          setNotice(result?.error ?? "Could not respond to the call. Check your connection and try again.");
-          if (result && !result.ok) setIncoming(current => current?.id === call.id ? null : current);
-          return;
-        }
-        dismissed.current.add(call.id);
+    setNotice(null);
+    try {
+      const result = await respondToCall(socket, call.id, action);
+      if (!result.ok) {
+        setNotice(result.error ?? "This call is no longer available.");
         setIncoming(current => current?.id === call.id ? null : current);
-        if (action === "accept" && result.url?.startsWith("/servers/")) router.push(result.url);
-      });
+        return;
+      }
+      dismissed.current.add(call.id);
+      setIncoming(current => current?.id === call.id ? null : current);
+      if (action === "accept" && result.url?.startsWith("/servers/")) router.push(result.url);
+    } catch {
+      setNotice("The call server did not confirm your response. Check the realtime connection and try again.");
+    } finally {
+      answering.current = null;
+      setPending(false);
+    }
   };
 
   return (

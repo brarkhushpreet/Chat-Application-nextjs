@@ -22,11 +22,14 @@ type Session = {
 };
 type Connection = { session: Session; socket?: CF.WebSocket };
 const json = (data: unknown, status = 200) => Response.json(data, { status });
+const callEvents = new Set(["call:sync", "call:respond", "call:join", "call:leave", "call:ring",
+  "call:offer", "call:answer", "call:ice", "call:ice-batch", "call:restart", "call:media-state"]);
 
 /** One hibernating coordinator for this portfolio deployment, not a Node server.
  * Poll sessions are persisted so fallback also survives object eviction. */
 export class RealtimeHub {
   private invitations: CallInvitations;
+  private commands = new Map<string, Promise<unknown>>();
   constructor(private ctx: CF.DurableObjectState, private env: NexusCloudflareEnv) {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     this.invitations = new CallInvitations({
@@ -40,7 +43,7 @@ export class RealtimeHub {
       send: (userId, event, payload) => this.broadcast(event, payload, c => c.session.userId === userId),
       audience: (userId, roomId, kind) => this.database(db => callAudience(db, userId, roomId, kind)),
       allowed: (userId, roomId, kind) => this.database(db => canAccessRoom(db, userId, roomId, kind)),
-    });
+    }, fn => ctx.blockConcurrencyWhile(fn));
   }
 
   protected database<T>(fn: Parameters<typeof withDatabase<T>>[1]) {
@@ -91,8 +94,44 @@ export class RealtimeHub {
     else await this.ctx.storage.delete(`poll:${c.session.id}`);
   }
 
+  private async current(c: Connection): Promise<Connection | null> {
+    if (c.socket && !this.ctx.getWebSockets().includes(c.socket)) return null;
+    const session = c.socket ? c.socket.deserializeAttachment() as Session
+      : await this.ctx.storage.get<Session>(`poll:${c.session.id}`);
+    const next = session ? { session, socket: c.socket } : null;
+    return next && this.alive(next) ? next : null;
+  }
+  private mutate(c: Connection, fn: (current: Connection) => Promise<unknown>) {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const current = await this.current(c);
+      return current ? fn(current) : { ok: false, error: "Session expired" };
+    });
+  }
+  // Preserve a sender's join/offer/leave order without blocking other senders
+  // (or WebSocket heartbeats) behind external database I/O.
+  private runCommand(c: Connection, message: Envelope) {
+    const started = Date.now();
+    const previous = this.commands.get(c.session.id) ?? Promise.resolve();
+    const task = previous.catch(() => {}).then(() => withDatabaseScope(async () => {
+      const current = await this.current(c);
+      const result = current ? await this.command(current, message) : { ok: false, error: "Session expired" };
+      if (callEvents.has(message.event)) {
+        const elapsedMs = Date.now() - started;
+        if (elapsedMs > 2000 || !(result as { ok?: boolean })?.ok) {
+          console.warn("CALL_SIGNAL_DIAGNOSTIC", { event: message.event, elapsedMs, ok: (result as { ok?: boolean })?.ok === true });
+        }
+      }
+      return result;
+    }));
+    this.commands.set(c.session.id, task);
+    void task.finally(() => {
+      if (this.commands.get(c.session.id) === task) this.commands.delete(c.session.id);
+    }).catch(() => {});
+    return task;
+  }
+
   async fetch(request: Request): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(() => withDatabaseScope(() => this.handleFetch(request)));
+    return withDatabaseScope(() => this.handleFetch(request));
   }
   private async handleFetch(request: Request): Promise<Response> {
     // Internal-only routes: the public worker never forwards arbitrary paths.
@@ -100,18 +139,22 @@ export class RealtimeHub {
     if (url.pathname === "/publish" && request.method === "POST") {
       const { room, event, payload } = await request.json() as { room: string; event: string; payload: unknown };
       const allowed = new Map<string, boolean>();
+      const roomId = room.startsWith("chat:") ? room.slice(5) : "";
       for (const c of await this.connections()) {
-        if (!this.alive(c)) continue;
-        if (room === `user:${c.session.userId}`) await this.send(c, { event, payload });
-        const roomId = room.startsWith("chat:") ? room.slice(5) : "";
         const kind = c.session.rooms[roomId];
-        if (kind) {
-          if (!allowed.has(c.session.userId)) allowed.set(c.session.userId,
-            await this.database(db => canAccessRoom(db, c.session.userId, roomId, kind)));
-          if (allowed.get(c.session.userId)) await this.send(c, { event, payload });
-          else { delete c.session.rooms[roomId]; await this.save(c); }
-        }
+        if (this.alive(c) && kind && !allowed.has(c.session.userId)) allowed.set(c.session.userId,
+          await this.database(db => canAccessRoom(db, c.session.userId, roomId, kind)));
       }
+      await this.ctx.blockConcurrencyWhile(async () => {
+        for (const c of await this.connections()) {
+          if (!this.alive(c)) continue;
+          if (room === `user:${c.session.userId}`) await this.send(c, { event, payload });
+          if (c.session.rooms[roomId] && allowed.has(c.session.userId)) {
+            if (allowed.get(c.session.userId)) await this.send(c, { event, payload });
+            else { delete c.session.rooms[roomId]; await this.save(c); }
+          }
+        }
+      });
       return json({ ok: true });
     }
     if (url.pathname === "/online") return json({ online: (await this.connections()).some(c =>
@@ -135,23 +178,28 @@ export class RealtimeHub {
       return json({ id: session.id });
     }
     const id = url.searchParams.get("sid") ?? "";
-    const session = await this.ctx.storage.get<Session>(`poll:${id}`);
-    const c = session ? { session } : null;
-    if (!c || c.session.userId !== userId || !this.alive(c)) return json({ error: "Reconnect required" }, 410);
-    c.session.seen = Date.now();
-    if (url.pathname === "/disconnect") { await this.remove(c); return json({ ok: true }); }
-    if (url.pathname === "/poll") {
-      const cursor = Number(url.searchParams.get("cursor") ?? 0);
-      const gap = c.session.queue.length > 0 && cursor < c.session.queue[0].seq - 1;
-      c.session.queue = c.session.queue.filter(item => item.seq > cursor);
-      await this.save(c);
-      return json({ events: c.session.queue, cursor: c.session.seq, gap });
+    const c = await this.ctx.blockConcurrencyWhile(async () => {
+      const session = await this.ctx.storage.get<Session>(`poll:${id}`);
+      if (!session || session.userId !== userId || !this.alive({ session })) return null;
+      session.seen = Date.now(); await this.save({ session });
+      return { session };
+    });
+    if (!c) return json({ error: "Reconnect required" }, 410);
+    if (url.pathname === "/disconnect") {
+      await this.runCommand(c, { event: "call:leave" });
+      await this.mutate(c, current => this.remove(current)); return json({ ok: true });
     }
+    if (url.pathname === "/poll") return json(await this.mutate(c, async current => {
+      const cursor = Number(url.searchParams.get("cursor") ?? 0);
+      const gap = current.session.queue.length > 0 && cursor < current.session.queue[0].seq - 1;
+      current.session.queue = current.session.queue.filter(item => item.seq > cursor);
+      await this.save(current);
+      return { events: current.session.queue, cursor: current.session.seq, gap };
+    }));
     if (url.pathname === "/event") {
-      await this.save(c);
       const body = await request.text();
       if (body.length > 65_536) return json({ error: "Event too large" }, 413);
-      return json(await this.command(c, JSON.parse(body)));
+      return json(await this.runCommand(c, JSON.parse(body)));
     }
     return json({ error: "Not found" }, 404);
   }
@@ -167,9 +215,11 @@ export class RealtimeHub {
         return await this.invitations.respond(c.session.userId, p.id, p.action);
       }
       if (event === "room:leave" && typeof payload === "string") {
-        delete c.session.rooms[payload]; await this.save(c); return { ok: true };
+        return this.mutate(c, async current => {
+          delete current.session.rooms[payload]; await this.save(current); return { ok: true };
+        });
       }
-      if (event === "call:leave") { await this.leave(c); return { ok: true }; }
+      if (event === "call:leave") return this.mutate(c, async current => { await this.leave(current); return { ok: true }; });
       if (!payload || typeof payload !== "object") return { ok: false };
       const p = payload as Record<string, unknown>;
       const roomId = p.roomId;
@@ -181,25 +231,31 @@ export class RealtimeHub {
         const allowed = await this.database(db => canAccessRoom(db, c.session.userId, roomId, kind));
         if (!allowed) return { ok: false, error: "Room access denied" };
         if (event === "room:join") {
-          if (Object.keys(c.session.rooms).length >= 16 && !c.session.rooms[roomId]) return { ok: false };
-          c.session.rooms[roomId] = kind; await this.save(c); return { ok: true };
+          return this.mutate(c, async current => {
+            if (Object.keys(current.session.rooms).length >= 16 && !current.session.rooms[roomId]) return { ok: false };
+            current.session.rooms[roomId] = kind; await this.save(current); return { ok: true };
+          });
         }
         if (event === "room:read") {
           const readAt = await this.database(db => markRoomRead(db, c.session.userId, roomId, kind));
-          await this.broadcast("chat:read", { roomId, readerUserId: c.session.userId, readAt }, other => Boolean(other.session.rooms[roomId]));
-          await this.broadcast("sidebar:read", { roomId, kind, readAt }, other => other.session.userId === c.session.userId);
+          await this.ctx.blockConcurrencyWhile(async () => {
+            await this.broadcast("chat:read", { roomId, readerUserId: c.session.userId, readAt }, other => Boolean(other.session.rooms[roomId]));
+            await this.broadcast("sidebar:read", { roomId, kind, readAt }, other => other.session.userId === c.session.userId);
+          });
           return { ok: true };
         }
-        await this.leave(c);
         const profile = await this.database(db => db.profile.findUnique({ where: { userId: c.session.userId } }));
         if (!profile) return { ok: false };
-        const participant: Participant = { socketId: c.session.id, userId: c.session.userId, name: profile.name,
-          imageUrl: profile.imageUrl, audioEnabled: true, videoEnabled: true, screenSharing: false };
-        c.session.call = { roomId, kind, participant }; await this.save(c);
-        const peers = (await this.connections()).filter(other => other.session.id !== c.session.id && this.alive(other) && other.session.call?.roomId === roomId)
-          .map(other => other.session.call!.participant);
-        await this.broadcast("call:peer-joined", participant, other => other.session.id !== c.session.id && other.session.call?.roomId === roomId);
-        return { ok: true, peers };
+        return this.mutate(c, async c => {
+          await this.leave(c);
+          const participant: Participant = { socketId: c.session.id, userId: c.session.userId, name: profile.name,
+            imageUrl: profile.imageUrl, audioEnabled: true, videoEnabled: true, screenSharing: false };
+          c.session.call = { roomId, kind, participant }; await this.save(c);
+          const peers = (await this.connections()).filter(other => other.session.id !== c.session.id && this.alive(other) && other.session.call?.roomId === roomId)
+            .map(other => other.session.call!.participant);
+          await this.broadcast("call:peer-joined", participant, other => other.session.id !== c.session.id && other.session.call?.roomId === roomId);
+          return { ok: true, peers };
+        });
       }
       const call = c.session.call;
       if (!call || call.roomId !== roomId || !await this.database(db => canAccessRoom(db, c.session.userId, roomId, call.kind))) return { ok: false };
@@ -207,33 +263,43 @@ export class RealtimeHub {
       if (["call:offer", "call:answer", "call:ice", "call:ice-batch", "call:restart"].includes(event)) {
         const target = (await this.connections()).find(other => other.session.id === p.target && other.session.call?.roomId === roomId && this.alive(other));
         if (!target || !await this.database(db => canAccessRoom(db, target.session.userId, roomId, call.kind))) return { ok: false };
-        await this.send(target, { event, payload: { from: c.session.id, data: p.data } });
-        return { ok: true };
+        return this.mutate(c, async current => {
+          const recipient = await this.current(target);
+          if (current.session.call?.roomId !== roomId || recipient?.session.call?.roomId !== roomId) return { ok: false };
+          await this.send(recipient, { event, payload: { from: current.session.id, data: p.data } });
+          return { ok: true };
+        });
       }
       if (event === "call:media-state") {
-        for (const key of ["audioEnabled", "videoEnabled", "screenSharing"] as const) {
-          if (typeof p[key] === "boolean") call.participant[key] = p[key];
-        }
-        await this.save(c);
-        await this.broadcast(event, call.participant, other => other.session.id !== c.session.id && other.session.call?.roomId === roomId);
-        return { ok: true };
+        return this.mutate(c, async c => {
+          const call = c.session.call;
+          if (!call || call.roomId !== roomId) return { ok: false };
+          for (const key of ["audioEnabled", "videoEnabled", "screenSharing"] as const) {
+            if (typeof p[key] === "boolean") call.participant[key] = p[key];
+          }
+          await this.save(c);
+          await this.broadcast(event, call.participant, other => other.session.id !== c.session.id && other.session.call?.roomId === roomId);
+          return { ok: true };
+        });
       }
       return { ok: false, error: "Unknown event" };
     } catch {
+      // Do not log SDP, ICE credentials, database URLs or invitation payloads.
+      console.error("REALTIME_COMMAND_FAILED", { event: callEvents.has(message.event) ? message.event : "room-event" });
       return { ok: false, error: "Realtime operation failed. Please retry." };
     }
   }
 
   async webSocketMessage(socket: CF.WebSocket, data: string | ArrayBuffer) {
-    return this.ctx.blockConcurrencyWhile(() => withDatabaseScope(() => this.handleMessage(socket, data)));
+    return this.handleMessage(socket, data);
   }
   private async handleMessage(socket: CF.WebSocket, data: string | ArrayBuffer) {
     if (typeof data !== "string" || data.length > 65_536) { socket.close(1009, "Event too large"); return; }
     const c = { socket, session: socket.deserializeAttachment() as Session };
-    if (!this.alive(c)) { await this.remove(c); return; }
+    if (!this.alive(c)) { await this.ctx.blockConcurrencyWhile(() => this.remove(c)); return; }
     try {
       const message = JSON.parse(data) as Envelope;
-      const result = await this.command(c, message);
+      const result = await this.runCommand(c, message);
       if (message.ack) socket.send(JSON.stringify({ ack: message.ack, result }));
     } catch { socket.close(1007, "Invalid event"); }
   }

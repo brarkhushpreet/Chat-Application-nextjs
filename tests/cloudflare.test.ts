@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { PrismaClient } from "@prisma/client";
 import { RealtimeHub } from "../cloudflare/realtime-hub";
@@ -9,11 +10,19 @@ import { CloudflareSocket } from "../lib/cloudflare-socket";
 
 Object.defineProperty(globalThis, "WebSocketRequestResponsePair", { value: class {}, configurable: true });
 function fixture() {
+  const inputGate = new AsyncLocalStorage<boolean>();
+  let mutationQueue = Promise.resolve<unknown>(undefined);
+  let beforeAccess: (userId: string) => Promise<void> = async () => {};
   const data = new Map<string, unknown>();
   const sockets: { deserializeAttachment(): unknown; serializeAttachment(value: unknown): void; send(value: string): void; close(): void }[] = [];
   const ctx = {
     setWebSocketAutoResponse() {}, getWebSockets: () => sockets,
-    blockConcurrencyWhile: <T>(fn: () => Promise<T>) => fn(),
+    blockConcurrencyWhile: <T>(fn: () => Promise<T>) => {
+      if (inputGate.getStore()) return fn();
+      const task = mutationQueue.then(() => inputGate.run(true, fn));
+      mutationQueue = task.catch(() => {});
+      return task;
+    },
     storage: {
       get: async (key: string) => structuredClone(data.get(key)),
       put: async (key: string, value: unknown) => { data.set(key, structuredClone(value)); },
@@ -26,6 +35,7 @@ function fixture() {
   const fakeDb = {
     channel: { findFirst: async ({ where }: { where: { id: string; server: { members: { some: { profile: { userId: string } } } } } }) => {
       accessQueries++;
+      await beforeAccess(where.server.members.some.profile.userId);
       return where.id === "room" && allowed.has(where.server.members.some.profile.userId) ? { id: "room" } : null;
     },
       findUniqueOrThrow: async () => ({ name: "Video room", type: "VIDEO", serverId: "team", server: {
@@ -35,7 +45,10 @@ function fixture() {
     profile: { findUnique: async ({ where }: { where: { userId: string } }) => ({ name: where.userId, imageUrl: "" }) },
   };
   class Hub extends RealtimeHub {
-    protected override database<T>(fn: (db: PrismaClient) => Promise<T>) { return fn(fakeDb as unknown as PrismaClient); }
+    protected override database<T>(fn: (db: PrismaClient) => Promise<T>) {
+      assert.equal(inputGate.getStore(), undefined, "Network database I/O must not block all realtime events");
+      return fn(fakeDb as unknown as PrismaClient);
+    }
   }
   const makeHub = () => new Hub(ctx as unknown as DurableObjectState, {} as NexusCloudflareEnv);
   let hub = makeHub();
@@ -45,6 +58,7 @@ function fixture() {
     body: body === undefined ? undefined : JSON.stringify(body),
   }));
   return { data, sockets, allowed, accessQueries: () => accessQueries, hub: () => hub, restart: () => { hub = makeHub(); }, request,
+    beforeAccess: (fn: typeof beforeAccess) => { beforeAccess = fn; },
     connect: async (user = "alice") => (await (await request("/connect", user, {})).json()).id as string,
     event: async (id: string, user: string, event: string, payload: unknown) => (await request(`/event?sid=${id}`, user, { event, payload })).json(),
     poll: async (id: string, user: string, cursor = 0) => (await request(`/poll?sid=${id}&cursor=${cursor}`, user)).json(),
@@ -67,6 +81,40 @@ test("polling rooms authorize membership, scope messages, survive hibernation, a
   f.allowed.delete("alice");
   await f.request("/publish", "", { room: "chat:room", event: "chat:room:messages", payload: { id: "private" } });
   assert.equal((await f.poll(alice, "alice", replay.cursor)).events.length, 0);
+});
+
+test("a slow membership lookup does not block another caller, and late signals cannot reach a departed peer", async () => {
+  const f = fixture(); const alice = await f.connect(); const bob = await f.connect("bob");
+  const join = { roomId: "room", kind: "channel" };
+  for (const [id, user] of [[alice, "alice"], [bob, "bob"]]) await f.event(id, user, "call:join", join);
+  let release!: () => void; let started!: () => void;
+  const waiting = new Promise<void>(resolve => { started = resolve; });
+  const delay = new Promise<void>(resolve => { release = resolve; });
+  f.beforeAccess(async user => { if (user === "alice") { started(); await delay; } });
+  const offer = f.event(alice, "alice", "call:offer", { roomId: "room", target: bob, data: "offer" });
+  await waiting;
+  try {
+    assert.equal((await f.event(bob, "bob", "call:leave", "room")).ok, true);
+    assert.equal((await f.poll(bob, "bob")).events.some((e: { message: { event: string } }) => e.message.event === "call:offer"), false);
+  } finally { release(); }
+  assert.equal((await offer).ok, false);
+});
+
+test("accept ACK can be recovered after hibernation without a second caller notification", async () => {
+  const f = fixture(); const alice = await f.connect(); const bob = await f.connect("bob");
+  await f.event(alice, "alice", "call:join", { roomId: "room", kind: "channel" });
+  await f.event(alice, "alice", "call:ring", { roomId: "room" });
+  const incoming = (await f.poll(bob, "bob")).events.find((e: { message: { event: string } }) => e.message.event === "call:incoming");
+  const answer = { id: incoming.message.payload.id, action: "accept" };
+  const first = await f.event(bob, "bob", "call:respond", answer);
+  assert.equal(first.ok, true);
+  f.restart();
+  assert.deepEqual(await f.event(bob, "bob", "call:respond", answer), first);
+  const notifications = (await f.poll(alice, "alice")).events.filter((e: { message: { payload?: { message?: string } } }) =>
+    e.message.payload?.message === "bob accepted. Connecting…");
+  assert.equal(notifications.length, 1);
+  f.allowed.delete("bob");
+  assert.equal((await f.event(bob, "bob", "call:respond", answer)).ok, false);
 });
 
 test("new-conversation and unread notifications are private to the addressed user", async () => {

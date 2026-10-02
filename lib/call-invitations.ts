@@ -9,6 +9,7 @@ type Recipient = { userId: string; name: string; url: string };
 type Audience = { callerName: string; callerImageUrl: string; roomName: string; video: boolean; recipients: Recipient[] };
 export type PendingCall = Omit<IncomingCall, "url"> & {
   callerId: string; sessionId: string; recipients: Recipient[];
+  responses?: { userId: string; action: "accept" | "decline"; url?: string }[];
 };
 type Connection = { id: string; userId: string; roomId?: string };
 export interface CallStore {
@@ -54,10 +55,11 @@ export class CallInvitations {
     send(userId: string, event: string, payload: unknown): Promise<void>;
     audience(userId: string, roomId: string, kind: RoomKind): Promise<Audience | null>;
     allowed(userId: string, roomId: string, kind: RoomKind): Promise<boolean>;
-  }) {}
+  }, private serialize?: <T>(fn: () => Promise<T>) => Promise<T>) {}
 
   // Serialize responses from different tabs, including on the local Node server.
   private run<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.serialize) return this.serialize(fn);
     const result = this.queue.then(fn);
     this.queue = result.catch(() => {});
     return result;
@@ -89,15 +91,17 @@ export class CallInvitations {
       callerImageUrl: call.callerImageUrl, roomName: call.roomName, video: call.video,
       expiresAt: call.expiresAt, url: `${recipient.url}${recipient.url.includes("?") ? "&" : "?"}incomingCall=${call.id}` };
   }
-  ring(sessionId: string, userId: string, roomId: string, kind: RoomKind) {
+  async ring(sessionId: string, userId: string, roomId: string, kind: RoomKind) {
+    // Network I/O must not hold the Durable Object's input gate. Recheck live
+    // session/invitation state inside the short serialized mutation below.
+    const audience = await this.transport.audience(userId, roomId, kind);
+    if (!audience) return { ok: false, error: "Call access denied" };
     return this.run(async () => {
       await this.sweep();
       const connections = await this.transport.connections();
       if (!connections.some(c => c.id === sessionId && c.userId === userId && c.roomId === roomId)) return { ok: false };
       const existing = await this.store.list();
       if (existing.some(call => call.sessionId === sessionId && call.roomId === roomId)) return { ok: true };
-      const audience = await this.transport.audience(userId, roomId, kind);
-      if (!audience) return { ok: false, error: "Call access denied" };
       const recipients: Recipient[] = [];
       let busy = false;
       for (const recipient of audience.recipients) {
@@ -118,29 +122,46 @@ export class CallInvitations {
       return { ok: true };
     });
   }
-  respond(userId: string, id: string, action: "accept" | "decline") {
+  async respond(userId: string, id: string, action: "accept" | "decline") {
+    const snapshot = (await this.store.list()).find(call => call.id === id);
+    if (!snapshot || (!snapshot.recipients.some(r => r.userId === userId) &&
+      !snapshot.responses?.some(r => r.userId === userId)) ||
+      !await this.transport.allowed(userId, snapshot.roomId, snapshot.kind)) {
+      return { ok: false, error: "This call is no longer available." };
+    }
     return this.run(async () => {
       await this.sweep();
       const call = (await this.store.list()).find(call => call.id === id);
+      const previous = call?.responses?.find(r => r.userId === userId);
+      if (previous) return previous.action === action
+        ? { ok: true, url: previous.url }
+        : { ok: false, error: "This call was already answered on another device." };
       const recipient = call?.recipients.find(r => r.userId === userId);
-      if (!call || !recipient || !await this.transport.allowed(userId, call.roomId, call.kind)) {
+      if (!call || !recipient) {
         return { ok: false, error: "This call is no longer available." };
       }
       const notification = this.notification(call, recipient);
+      const url = action === "accept" ? notification.url : undefined;
       call.recipients = call.recipients.filter(r => r.userId !== userId);
+      call.responses = [...(call.responses ?? []), { userId, action, url }];
       await this.store.put(call);
       await this.transport.send(userId, "call:dismissed", { id });
       await this.transport.send(call.callerId, "call:ring-status", { roomId: call.roomId,
         message: action === "decline" ? `${recipient.name} is busy right now.` : `${recipient.name} accepted. Connecting…` });
-      return { ok: true, url: action === "accept" ? notification.url : undefined };
+      return { ok: true, url };
     });
   }
-  sync(userId: string) {
+  async sync(userId: string) {
+    const allowed = new Set<string>();
+    for (const call of await this.store.list()) {
+      if (call.recipients.some(r => r.userId === userId) &&
+        await this.transport.allowed(userId, call.roomId, call.kind)) allowed.add(call.id);
+    }
     return this.run(async () => {
       await this.sweep();
       for (const call of await this.store.list()) {
         const recipient = call.recipients.find(r => r.userId === userId);
-        if (recipient && await this.transport.allowed(userId, call.roomId, call.kind)) {
+        if (recipient && allowed.has(call.id)) {
           await this.transport.send(userId, "call:incoming", this.notification(call, recipient));
         }
       }
