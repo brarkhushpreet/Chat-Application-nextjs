@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "@/components/provider/socket-provider";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
+import { LoadingStatus } from "@/components/loading-status";
 import { CallPeer, callVideoConstraints, playCallMedia, validIceBatch, type PeerStatus } from "@/lib/call-peer";
 
 type RoomKind = "channel" | "conversation";
@@ -78,6 +79,7 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
   const [audioEnabled, setAudioEnabled] = useState(audio);
   const [videoEnabled, setVideoEnabled] = useState(video);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [screenShareNotice, setScreenShareNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<"joining" | "joined" | "error">("joining");
   const [error, setError] = useState<CallError | null>(null);
   const [retrySequence, setRetrySequence] = useState(0);
@@ -488,7 +490,12 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
   }, [publishMediaState]);
 
   const toggleScreenShare = async () => {
+    setScreenShareNotice(null);
     if (screenSharing) return stopScreenShare();
+    if (typeof navigator.mediaDevices?.getDisplayMedia !== "function") {
+      setScreenShareNotice("This browser cannot share your screen. Use a supported desktop browser to present. You can still use your camera, microphone, and view someone else's shared screen here.");
+      return;
+    }
     try {
       const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const screenTrack = display.getVideoTracks()[0];
@@ -507,8 +514,17 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
       setScreenSharing(true);
       setVideoEnabled(true);
       publishMediaState({ screenSharing: true, videoEnabled: true });
-    } catch {
-      // Closing the browser picker is expected and needs no error state.
+    } catch (shareError) {
+      const name = shareError instanceof Error ? shareError.name : "";
+      if (name === "NotAllowedError") {
+        setScreenShareNotice("Screen sharing was cancelled or blocked by your browser. To try again, select Share screen and allow sharing in the browser's picker.");
+      } else if (name === "NotSupportedError") {
+        setScreenShareNotice("Screen sharing is not supported by this browser. Join from a supported desktop browser to present; you can continue this call here.");
+      } else if (name === "NotReadableError") {
+        setScreenShareNotice("Your screen could not be captured. Check your device's screen-recording permissions and try again. Your call is still active.");
+      } else {
+        setScreenShareNotice("Screen sharing could not start. Try again from a supported desktop browser. Your call is still active.");
+      }
     }
   };
 
@@ -590,10 +606,23 @@ export const MediaRoom = ({ chatId, video, audio, roomKind }: MediaRoomProps) =>
         </div>
       </div>
 
+      {(status === "joining" || !isConnected) && (
+        <div className="relative mx-4 mb-3 rounded-xl border border-border bg-card p-3 md:mx-8">
+          <LoadingStatus label={!isConnected ? "Reconnecting to the call server…" : "Preparing your call…"}
+            hint="Waiting for the server or device permissions. Check for a camera/microphone prompt." />
+        </div>
+      )}
       {participants.some(participant => participant.mediaStatus?.detail.startsWith("Unable to connect")) && (
         <div role="status" className="relative mx-4 mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 text-sm text-card-foreground md:mx-8">
           Media could not connect. Try reconnecting or switch networks.
           <button type="button" onClick={retryCall} className="shrink-0 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground">Retry call</button>
+        </div>
+      )}
+      {screenShareNotice && (
+        <div className="relative mx-4 mb-3 flex items-start gap-3 rounded-xl border border-border bg-card p-3 text-sm text-card-foreground md:mx-8">
+          <p role="status" className="flex-1">{screenShareNotice}</p>
+          <button type="button" aria-label="Dismiss screen sharing notice" onClick={() => setScreenShareNotice(null)}
+            className="shrink-0 rounded px-2 py-1 text-primary hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">Dismiss</button>
         </div>
       )}
       <div className="relative grid min-h-0 flex-1 auto-rows-fr grid-cols-1 gap-3 overflow-y-auto px-4 pb-28 md:grid-cols-2 md:gap-4 md:px-8 lg:grid-cols-3">

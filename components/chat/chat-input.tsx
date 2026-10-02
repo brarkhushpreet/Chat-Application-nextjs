@@ -3,7 +3,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem } from "../ui/form";
-import { Plus, SendHorizontal } from "lucide-react";
+import { LoaderCircle, Plus, SendHorizontal } from "lucide-react";
+import { useState } from "react";
+import { LoadingStatus } from "@/components/loading-status";
 import { Input } from "../ui/input";
 import qs from "query-string";
 import axios from "axios";
@@ -31,6 +33,7 @@ export const ChatInput = (
 
   const {onOpen}=useModal();
   const router= useRouter();
+  const [sendError, setSendError] = useState<string | null>(null);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -41,6 +44,7 @@ export const ChatInput = (
   const isLoading = form.formState.isSubmitting;
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    setSendError(null);
     try {
         const url=qs.stringifyUrl({
             url:apiUrl,
@@ -49,8 +53,8 @@ export const ChatInput = (
         await axios.post(url,values);
         form.reset();
         router.refresh();
-    } catch (error) {
-        console.log("error while submitting chat-input",error);
+    } catch {
+        setSendError("Message could not be sent. Your draft is saved here; try again.");
     }
    
   };
@@ -86,18 +90,21 @@ export const ChatInput = (
 
                     <div className="flex items-center gap-1">
                     <EmojiPicker
-                      onChange={(emoji: string) => field.onChange(`${field.value} ${emoji}`)}
+                      onChange={(emoji: string) => { if (!isLoading) field.onChange(`${field.value} ${emoji}`); }}
                     />
                     <button
                       type="submit"
                       disabled={isLoading}
-                      aria-label="Send message"
+                      aria-label={isLoading ? "Sending message" : "Send message"}
+                      aria-busy={isLoading}
                       className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-40"
                     >
-                      <SendHorizontal className="h-4 w-4" />
+                      {isLoading ? <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                     </button>
                   </div>
                   </div>
+                  {isLoading && <div className="pt-2"><LoadingStatus label="Sending message…" hint="Waiting for server confirmation. Please don't resend yet." /></div>}
+                  {sendError && <p role="alert" className="pt-2 text-xs text-destructive">{sendError}</p>}
                 </div>
               </FormControl>
             </FormItem>

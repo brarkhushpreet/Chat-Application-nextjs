@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigationFeedback } from "@/components/provider/navigation-feedback";
 import { Phone, PhoneOff, Video, X } from "lucide-react";
 import { useSocket } from "@/components/provider/socket-provider";
 import { UserAvatar } from "@/components/user-avatar";
@@ -11,7 +11,7 @@ import { respondToCall } from "@/lib/call-response";
 
 export function IncomingCallNotification() {
   const { socket, isConnected } = useSocket();
-  const router = useRouter();
+  const { navigate } = useNavigationFeedback();
   const [incoming, setIncoming] = useState<IncomingCall | null>(null);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export function IncomingCallNotification() {
       }
       dismissed.current.add(call.id);
       setIncoming(current => current?.id === call.id ? null : current);
-      if (action === "accept" && result.url?.startsWith("/servers/")) router.push(result.url);
+      if (action === "accept" && result.url?.startsWith("/servers/")) navigate(result.url, "Opening accepted call…");
     } catch {
       setNotice("The call server did not confirm your response. Check the realtime connection and try again.");
     } finally {

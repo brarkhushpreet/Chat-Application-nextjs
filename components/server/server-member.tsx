@@ -3,8 +3,7 @@
 import { cn } from "@/lib/utils";
 import { Member, MemberRole, Profile, Server } from "@prisma/client"
 import { LoaderCircle, ShieldAlert, ShieldCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useNavigationFeedback } from "@/components/provider/navigation-feedback";
 import { UserAvatar } from "../user-avatar";
 import { startConversation } from "@/lib/start-conversation";
 
@@ -23,22 +22,15 @@ export const ServerMember=({
 member,
 server,
 }:serverMemberProps)=>{
-    const [isStarting, setIsStarting] = useState(false);
-    const router= useRouter();
+    const { navigate, pendingHref } = useNavigationFeedback();
+    const href = `/servers/${server.id}/conversations/${member.id}`;
+    const isStarting = pendingHref === href;
     
 
 
     const icon= roleIconMap[member.role];
 
-    const onClick = async () => {
-      try {
-        setIsStarting(true);
-        await startConversation(server.id, member.id);
-        router.push(`/servers/${server.id}/conversations/${member.id}`);
-      } finally {
-        setIsStarting(false);
-      }
-    }
+    const onClick = () => navigate(href, `Opening chat with ${member.profile.name}…`, () => startConversation(server.id, member.id));
   
  return (
    <button onClick={onClick} disabled={isStarting}

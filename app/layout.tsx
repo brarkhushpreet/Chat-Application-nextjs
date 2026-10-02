@@ -8,6 +8,7 @@ import { ModalProvider } from "@/components/provider/modal-provider";
 import { SocketProvider } from "@/components/provider/socket-provider";
 import { QueryProvider } from "@/components/provider/query-provider";
 import { IncomingCallNotification } from "@/components/incoming-call-notification";
+import { NavigationFeedbackProvider } from "@/components/provider/navigation-feedback";
 
 
 const sans = Manrope({ subsets: ["latin"], variable: "--font-sans" });
@@ -32,11 +33,13 @@ export default function RootLayout({
           storageKey="nexus-theme"
         >
         <SocketProvider>
+        <NavigationFeedbackProvider>
         <IncomingCallNotification />
         <ModalProvider/>
         <QueryProvider>
         {children}
         </QueryProvider> 
+        </NavigationFeedbackProvider>
         </SocketProvider>
         </ThemeProvider>
         </body>

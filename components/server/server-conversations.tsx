@@ -1,6 +1,7 @@
 "use client";
 
-import { MessageSquareText } from "lucide-react";
+import { LoaderCircle, MessageSquareText } from "lucide-react";
+import { useNavigationFeedback } from "@/components/provider/navigation-feedback";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -27,6 +28,7 @@ export function ServerConversations({
   const { socket } = useSocket();
   const params = useParams();
   const router = useRouter();
+  const { navigate, pendingHref } = useNavigationFeedback();
 
   useEffect(() => {
     if (!socket) {
@@ -135,14 +137,16 @@ export function ServerConversations({
               ? conversation.memberTwo
               : conversation.memberOne;
           const isActive = params?.memberId === otherMember.id;
+          const href = `/servers/${serverId}/conversations/${otherMember.id}`;
+          const pending = pendingHref === href;
 
           return (
             <button
               key={conversation.id}
               type="button"
-              onClick={() =>
-                router.push(`/servers/${serverId}/conversations/${otherMember.id}`)
-              }
+              disabled={pending}
+              aria-busy={pending}
+              onClick={() => navigate(href, `Opening chat with ${otherMember.profile.name}…`)}
               className={cn(
                 "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition",
                 "hover:bg-foreground/[0.04] dark:hover:bg-white/[0.055]",
@@ -165,6 +169,7 @@ export function ServerConversations({
                   Private conversation
                 </span>
               </span>
+              {pending && <LoaderCircle aria-hidden="true" className="h-4 w-4 shrink-0 text-primary motion-safe:animate-spin" />}
               {unreadCount > 0 && (
                 <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">
                   {unreadCount > 99 ? "99+" : unreadCount}

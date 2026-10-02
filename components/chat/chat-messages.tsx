@@ -11,6 +11,7 @@ import { useChatScroll } from "@/hooks/use-chat-scroll";
 
 import { ChatWelcome } from "./chat-welcome";
 import { ChatItem } from "./chat-item";
+import { LoadingStatus } from "@/components/loading-status";
 
 const DATE_FORMAT = "d MMM yyyy, HH:mm";
 
@@ -56,6 +57,8 @@ export const ChatMessages = ({
     hasNextPage,
     isFetchingNextPage,
     status,
+    refetch,
+    isFetching,
   } = useChatQuery({
     queryKey,
     apiUrl,
@@ -74,10 +77,7 @@ export const ChatMessages = ({
   if (status === "pending") {
     return (
       <div className="flex flex-col flex-1 justify-center items-center">
-        <Loader2 className="h-7 w-7 text-zinc-500 animate-spin my-4" />
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Loading messages...
-        </p>
+        <LoadingStatus label="Loading messages…" />
       </div>
     )
   }
@@ -89,6 +89,9 @@ export const ChatMessages = ({
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Something went wrong!
         </p>
+        <button type="button" disabled={isFetching} onClick={() => void refetch()} className="mt-3 rounded-lg border border-border px-3 py-2 text-sm text-foreground disabled:opacity-50">
+          {isFetching ? "Retrying…" : "Retry loading messages"}
+        </button>
       </div>
     )
   }

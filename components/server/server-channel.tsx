@@ -6,8 +6,9 @@ import {
   MemberRole,
   Server
 } from "@prisma/client";
-import { AudioLines, Edit, Lock, MessageCircleMore, Trash, Video } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { AudioLines, Edit, LoaderCircle, Lock, MessageCircleMore, Trash, Video } from "lucide-react";
+import { useParams } from "next/navigation";
+import { useNavigationFeedback } from "@/components/provider/navigation-feedback";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -36,7 +37,9 @@ export const ServerChannel = ({
 }: ServerChannelProps) => {
   const { onOpen } = useModal();
   const params = useParams();
-  const router = useRouter();
+  const { navigate, pendingHref } = useNavigationFeedback();
+  const href = `/servers/${params?.serverId}/channels/${channel.id}`;
+  const pending = pendingHref === href;
   const { socket } = useSocket();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
 
@@ -72,7 +75,7 @@ export const ServerChannel = ({
   }, [channel.id, params?.channelId, socket]);
 
   const onClick = () => {
-    router.push(`/servers/${params?.serverId}/channels/${channel.id}`)
+    navigate(href, `Opening ${channel.name}…`);
   }
 
   const onAction = (e: React.MouseEvent, action: ModalType) => {
@@ -83,13 +86,15 @@ export const ServerChannel = ({
   return (
     <button
       onClick={onClick}
+      disabled={pending}
+      aria-busy={pending}
       className={cn(
         "group mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-foreground/[0.04] dark:hover:bg-white/[0.055]",
         params?.channelId === channel.id && "bg-card text-primary shadow-sm ring-1 ring-inset ring-border dark:shadow-none dark:ring-transparent dark:bg-primary/15"
       )}
     >
       <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-black/[0.04] text-black/40 transition dark:bg-white/[0.05] dark:text-white/40", params?.channelId === channel.id && "bg-[#7567ff]/10 text-[#7567ff] dark:text-[#a39bff]")}>
-        <Icon className="h-4 w-4" />
+        {pending ? <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" /> : <Icon className="h-4 w-4" />}
       </span>
       <p className={cn(
         "line-clamp-1 text-left text-sm font-semibold text-foreground/80 transition group-hover:text-foreground",

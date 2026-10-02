@@ -123,7 +123,7 @@ const InitialModal = () => {
                     />
                 </div>
                 <DialogFooter className="bg-black/[0.025] px-8 py-5 dark:bg-white/[0.025] sm:justify-center">
-                    <Button className="h-11 w-full rounded-2xl" variant="primary" disabled={isLoading}>Create space</Button>
+                    <Button className="h-11 w-full rounded-2xl" variant="primary" loading={isLoading}>Create space</Button>
                 </DialogFooter>
 
             </form>

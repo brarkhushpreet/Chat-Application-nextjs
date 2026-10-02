@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
+import { LoaderCircle } from "lucide-react";
+import { useNavigationFeedback } from "@/components/provider/navigation-feedback";
 
 import { cn } from "@/lib/utils";
 import { ActionTooltip } from "@/components/action-tooltip";
@@ -18,10 +20,11 @@ export const NavigationItem = ({
   name
 }: NavigationItemProps) => {
   const params = useParams();
-  const router = useRouter();
+  const { navigate, pendingHref } = useNavigationFeedback();
+  const pending = pendingHref === `/servers/${id}`;
 
   const onClick = () => {
-    router.push(`/servers/${id}`);
+    navigate(`/servers/${id}`, `Opening ${name}…`);
   }
 
   return (
@@ -32,6 +35,8 @@ export const NavigationItem = ({
     >
       <button
         onClick={onClick}
+        disabled={pending}
+        aria-busy={pending}
         className="group relative flex w-full items-center justify-center"
       >
         <div className={cn(
@@ -50,6 +55,7 @@ export const NavigationItem = ({
             alt={name}
             className="object-cover"
           />
+          {pending && <span className="absolute inset-0 flex items-center justify-center bg-card/80"><LoaderCircle className="h-5 w-5 text-primary motion-safe:animate-spin" /></span>}
         </div>
       </button>
     </ActionTooltip>

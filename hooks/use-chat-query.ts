@@ -23,6 +23,7 @@ export const useChatQuery = ({
     }, { skipNull: true });
 
     const res = await fetch(url);
+    if (!res.ok) throw new Error("Unable to load messages");
     return res.json();
   };
 
@@ -32,6 +33,8 @@ export const useChatQuery = ({
     hasNextPage,
     isFetchingNextPage,
     status,
+    refetch,
+    isFetching,
   } = useInfiniteQuery({
     queryKey: [queryKey],
     queryFn: fetchMessages,
@@ -46,5 +49,7 @@ export const useChatQuery = ({
     hasNextPage,
     isFetchingNextPage,
     status,
+    refetch,
+    isFetching,
   };
 }

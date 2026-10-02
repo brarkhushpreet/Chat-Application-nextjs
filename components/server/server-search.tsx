@@ -3,7 +3,8 @@
 import { Search } from "lucide-react";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
+import { useNavigationFeedback } from "@/components/provider/navigation-feedback";
 import { startConversation } from "@/lib/start-conversation";
 
 interface ServerSearchProps{
@@ -24,7 +25,7 @@ const ServerSearch=(
 
     const[open ,setOpen]=useState(false);
     const params= useParams();
-    const router= useRouter();
+    const { navigate } = useNavigationFeedback();
 
     useEffect(()=>{
         const down=(e:KeyboardEvent)=>{
@@ -40,11 +41,10 @@ const ServerSearch=(
     const onClick=async ({id,type}:{id:string,type:"channel"|"member"})=>{
         setOpen(false);
         if(type==="member"){
-            await startConversation(String(params?.serverId), id);
-            return router.push(`/servers/${params?.serverId}/conversations/${id}`)
+            return navigate(`/servers/${params?.serverId}/conversations/${id}`, "Opening conversation…", () => startConversation(String(params?.serverId), id));
         }
         if(type==="channel"){
-            return router.push(`/servers/${params?.serverId}/channels/${id}`)
+            return navigate(`/servers/${params?.serverId}/channels/${id}`, "Opening room…");
         }
     }
 

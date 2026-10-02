@@ -105,7 +105,7 @@ export const MessageFileModal = () => {
               </div>
             </div>
             <DialogFooter className="border-t border-border bg-muted/50 px-6 py-4">
-              <Button variant="primary" disabled={isLoading}>
+              <Button variant="primary" loading={isLoading}>
                 Send
               </Button>
             </DialogFooter>

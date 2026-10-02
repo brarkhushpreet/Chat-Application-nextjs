@@ -138,7 +138,7 @@ const EditServerModal = () => {
                     />
                 </div>
                 <DialogFooter className="border-t border-border bg-muted/50 px-6 py-4">
-                    <Button  variant="primary" disabled={isLoading}>Save</Button>
+                    <Button variant="primary" loading={isLoading}>Save</Button>
                 </DialogFooter>
 
             </form>
